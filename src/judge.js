@@ -9,7 +9,7 @@
 import { t, lang, josa } from './i18n.js';
 import { settings, save, chatState, currentChatId, uid } from './store.js';
 import { SIMPLE, STAGE_MAX } from './spells.js';
-import { views, chatView, judge } from './engine.js';
+import { views, chatView, judge, secretRelease, veiled } from './engine.js';
 import { targetName, nameEn, formText, stateText } from './describe.js';
 import { askJudge } from './ai.js';
 import { activeCasters, waitTurns, readSpell, targetFromName, castBlock, castByCharacter, spellListEn, chatMembers } from './casters.js';
@@ -40,16 +40,27 @@ export function conditionsOf(v) {
             out.push({ what: 'stack', label: text || t('cond'), en: `"${text || 'the condition'}" happens to ${who}` });
         }
         const br = SIMPLE[e.spell]?.breaker;
-        if (br) out.push({ what: 'release', via: 'breaker', label: br.label[lang()] || br.label.en, en: `${who}: ${br.rule.en.replace(/^Ends( at once)? if /i, '').replace(/\.$/, '')}` });
+        const set = [];
+        if (br) set.push({ what: 'release', via: 'breaker', label: br.label[lang()] || br.label.en, en: `${who}: ${br.rule.en.replace(/^Ends( at once)? if /i, '').replace(/\.$/, '')}` });
         if (e.release?.kind === 'truth') {
-            out.push({ what: 'release', label: t('btn_truth'), en: e.release.text ? `${who} tells the truth about ${e.release.text}` : `${who} tells the truth (admits something they hid or lied about)` });
+            set.push({ what: 'release', label: t('btn_truth'), en: e.release.text ? `${who} tells the truth about ${e.release.text}` : `${who} tells the truth (admits something they hid or lied about)` });
         }
-        if (e.release?.kind === 'action') out.push({ what: 'release', label: e.release.text || t('rel_action'), en: String(e.release.text || 'the set act is done') });
+        if (e.release?.kind === 'action') set.push({ what: 'release', label: e.release.text || t('rel_action'), en: String(e.release.text || 'the set act is done') });
         // A character's spell: the character can undo it.
         if (e.source?.kind === 'character') {
             const by = String(e.source.name || '?');
-            out.push({ what: 'release', via: 'caster', label: t('btn_caster_undo', { name: by, jg: josa(by, '이/가') }), en: `${by} undoes (lifts) their own ${nameEn(e)} spell on ${who}` });
+            set.push({ what: 'release', via: 'caster', label: t('btn_caster_undo', { name: by, jg: josa(by, '이/가') }), en: `${by} undoes (lifts) their own ${nameEn(e)} spell on ${who}` });
         }
+        // A secret ending (2-C-1): the AI judging still knows it; the button does not say it.
+        // A built-in breaker (wake, touch) stays plain, unless the whole spell was cast in secret.
+        if (secretRelease(e)) {
+            const hide = set.filter(c => c.via !== 'breaker' || veiled(e));
+            hide.forEach((c, i) => {
+                const n = hide.length > 1 ? ` ${i + 1}` : '';
+                Object.assign(c, { real: c.label, secret: true, label: t('btn_secret') + n, short: t('btn_secret_short') + n });
+            });
+        }
+        out.push(...set);
     }
     return out;
 }

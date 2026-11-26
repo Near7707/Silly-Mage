@@ -171,6 +171,26 @@ const EN = {
     sug_cast_notlist: 'Not one of the spells of {name}. Casting it anyway still counts toward how often.',
     sug_cast_wait: '{name} cast one recently ({n} turns to go). Cast it anyway?',
     sug_apply_cast: 'Apply — cast it', sug_cast_anyway: 'Cast anyway', toast_char_cast: '{name} → {title}',
+    // 2-C-1 secrets
+    vis_nobody: 'No one knows it is magic', vis_nobody_tag: 'unaware it is magic',
+    secret_rel: 'Keep how it ends a secret',
+    secret_rel_hint: 'Shows as "???" on the card. Find it in the story; AI judging keeps checking.',
+    clue_t: 'Drop clues', clue_every: 'every {n} turns', clue_off: 'no clues', clue_hint: '0 = no clues · 2–20 turns',
+    omen: 'Send an omen before it fires',
+    omen_hint_turns: 'One small odd sign goes to the AI, once, 1 turn before it fires.',
+    omen_hint_other: 'Waits on a chance or a condition: the odd sign goes out once, in the next reply.',
+    rel_secret: '???', rel_secret_tag: 'secret', revealed_tag: '(revealed)',
+    r_clue: 'Clues', clue_info: 'Dropped {n} · next in {k} turns', clue_info_1: 'Dropped {n} · next in the next reply',
+    secret_note: 'Find how it ends in the story. When it happens, AI judging tells you.',
+    btn_secret: '🔒 Found it?', btn_secret_short: '🔒 ???', btn_reveal: 'Show answer',
+    reveal_q: 'Show the hidden way it ends? The effect stays.',
+    reveal_q_veiled: 'Show what this unknown effect is? The effect stays.',
+    secret_found_q: 'Judge that the hidden way it ends has happened? (The answer shows after.)',
+    toast_secret_found: 'It broke — the way: {r}',
+    sug_secret_t: 'The hidden way it ends seems found', sug_secret_rel: 'How it ends (shown now)',
+    sug_secret_no: '"No" hides the answer again.',
+    c_sneak: 'Cast in secret',
+    c_sneak_sub: 'Half of the hits are cast in secret: the AI does not show the casting, and it shows here only as an unknown effect. How it ends is secret too.',
 };
 
 const KO = {
@@ -332,6 +352,26 @@ const KO = {
     sug_cast_notlist: '{name}의 목록에 없는 주문이에요 · 그래도 걸면 빈도는 똑같이 셈',
     sug_cast_wait: '{name}{jg} 얼마 전에 썼어요({n}턴 남음) · 그래도 걸까요?',
     sug_apply_cast: '적용 — 걸기', sug_cast_anyway: '그래도 걸기', toast_char_cast: '{name} → {title}',
+    // 2-C-1 비밀
+    vis_nobody: '아무도 모름', vis_nobody_tag: '마법인 줄 모름',
+    secret_rel: '풀리는 법 비밀로 하기',
+    secret_rel_hint: '카드에 "???"로 보여요. 이야기 속에서 직접 알아내야 하고, AI 판정은 계속 점검해요.',
+    clue_t: '단서 흘리기', clue_every: '{n}턴마다 한 번', clue_off: '단서 없음', clue_hint: '0 = 단서 없음 · 2~20턴',
+    omen: '발동 전에 전조 보내기',
+    omen_hint_turns: '발동 1턴 전에 AI에게 작은 이상 징후 한 줄을 한 번만 보내요.',
+    omen_hint_other: '확률·조건으로 발동하는 주문은 다음 답변에 이상 징후를 한 번 보내요.',
+    rel_secret: '???', rel_secret_tag: '비밀', revealed_tag: '(공개됨)',
+    r_clue: '단서', clue_info: '이야기에 {n}번 나옴 · 다음은 {k}턴 뒤', clue_info_1: '이야기에 {n}번 나옴 · 다음은 바로 다음 답변',
+    secret_note: '풀리는 법을 이야기 속에서 찾아보세요. 이뤄지면 AI 판정이 알려 줘요.',
+    btn_secret: '🔒 찾은 것 같아요', btn_secret_short: '🔒 ???', btn_reveal: '정답 보기',
+    reveal_q: '숨겨진 풀리는 법을 볼까요? 효과는 그대로예요.',
+    reveal_q_veiled: '정체불명 효과의 정체를 볼까요? 효과는 그대로예요.',
+    secret_found_q: '숨겨진 풀리는 법이 이뤄졌다고 판정할까요? (정답은 판정 뒤에 보여요)',
+    toast_secret_found: '풀렸어요 — 풀리는 법: {r}',
+    sug_secret_t: '숨겨진 풀리는 법을 찾은 것 같아요', sug_secret_rel: '풀리는 법 (이제 공개)',
+    sug_secret_no: '"아니에요"를 누르면 정답은 다시 가려져요.',
+    c_sneak: '몰래 걸기',
+    c_sneak_sub: '주사위가 맞으면 반쯤은 몰래 걸어요. AI는 거는 장면을 드러내지 않고, 여기엔 "정체불명의 효과"로만 보여요. 풀리는 법도 비밀이 돼요.',
 };
 
 const TABLES = { en: EN, ko: KO };

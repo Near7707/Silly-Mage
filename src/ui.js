@@ -12,7 +12,7 @@ import {
     SIMPLE, FAMILIES, SPELLS, SPELL_ORDER, FORMS, formById, STAGES, STAGE_MAX, SOURCES, MOTIVES, TRIGGERS, RELEASES,
     VISIBILITY, DURATIONS, MAX_EFFECTS, MOTIVE_SUGGEST, RANDOM_OBJECTS, RANDOM_PLACES,
 } from './spells.js';
-import { views, shown, liveCount, cast, judge, dispel, undo, undoable, history, removeEffect, lastRef } from './engine.js';
+import { views, shown, liveCount, cast, judge, dispel, undo, undoable, history, removeEffect, lastRef, secretRelease, veiled, clueInfo, reveal } from './engine.js';
 import { targetName, initial, formText, stateText } from './describe.js';
 import { iconSvg, framedIcon, MAGE_GLYPH } from './icons.js';
 import { syncTheme, famColor, colorMode } from './theme.js';
@@ -72,6 +72,9 @@ function simpleName(e) {
     if (e.spell === 'glamour' && e.x) return `${spellName('glamour')} · ${e.x}`;
     return spellName(e.spell);
 }
+
+/** What I may see of an effect's name: a spell cast in secret stays "unknown". */
+function shownTitle(e) { return veiled(e) ? t('unknown_spell') : effectTitle(e); }
 
 function effectTitle(e) {
     if (e.title) return e.title;
@@ -136,7 +139,7 @@ function isCurse(e) { return e.method === 'curse' || e.method === 'stacked'; }
 
 function leftText(v) {
     const e = v.e;
-    if (e.surprise && e.duration > 0) return t('left_unknown');
+    if ((e.surprise || veiled(e)) && e.duration > 0) return t('left_unknown');
     if (e.duration > 0) return v.left === 1 ? t('left_one') : t('left_n', { n: v.left });
     return t('left_none');
 }
@@ -159,6 +162,7 @@ function chipText(v) {
         return t('chip_wait');
     }
     if (v.status === 'ended') return t('chip_ending');
+    if (veiled(e)) return '??? ?';
     if (e.method === 'stacked') {
         if (v.stage <= 0) return `${t('curse')} 0/${STAGE_MAX}`;
         return `${STAGES[v.stage - 1].short[lang()]} ${v.stage}/${STAGE_MAX}`;
@@ -170,7 +174,7 @@ function chipText(v) {
 
 /** Buttons I press when something happened in the story. */
 function condButtons(v) {
-    return conditionsOf(v).map(({ what, via, label }) => ({ what, via, label }));
+    return conditionsOf(v).map(({ what, via, label, short }) => ({ what, via, label, short }));
 }
 
 function condBtnHtml(v, b, cls = 'mage-cond', who = false, sug = null) {
@@ -226,7 +230,7 @@ function renderBar(list) {
     const rs = s.enabled && currentChatId() && s.rules ? rulesState() : null;
     const sugs = s.enabled && currentChatId() ? suggestions() : [];
     const dice = getDice(currentChatId());
-    if (!s.enabled || !currentChatId() || (!list.length && !rs && !sugs.length && !isChecking() && !dice)) { barEl.hidden = true; barEl.innerHTML = ''; ui.sugOpen = false; return; }
+    if (!s.enabled || !currentChatId() || (!list.length && !rs && !sugs.length && !isChecking() && !(dice && !dice.sneak))) { barEl.hidden = true; barEl.innerHTML = ''; ui.sugOpen = false; return; }
     if (!sugs.length) ui.sugOpen = false;
     const sugFor = (v, b) => sugs.find(x => x.kind === 'cond' && x.effectId === v.e.id && x.what === b.what && (x.via || '') === (b.via || ''));
     const barSkin = s.skin === 'tome' ? 'theme' : s.skin; // the bar keeps the chat readable; old-book paper only in the window
@@ -240,16 +244,17 @@ function renderBar(list) {
     }
     const chip = (u) => {
         const e = u[0].e, v = u[0];
-        const col = famColor(FAMILIES[SPELLS[e.spell]?.family || 'change'].color, barMode);
+        const hid = veiled(e) || (e.surprise && v.status === 'pending');
+        const col = famColor(FAMILIES[hid ? 'change' : SPELLS[e.spell]?.family || 'change'].color, barMode);
         const who = u.length > 1 ? `<span class="mage-pair">${u.map(x => ini(x.e.target)).join('')}</span>` : ini(e.target);
-        return `<button type="button" class="mage-chip${v.status !== 'active' ? ' mage-dim' : ''}" data-mage-open="${esc(u.map(x => x.e.id).join(','))}" style="--mage-fam:${col}" title="${esc(effectTitle(e))}">`
-            + iconSvg(e.surprise && v.status === 'pending' ? 'polymorph' : SPELLS[e.spell]?.icon, { size: 18, curse: isCurse(e) })
+        return `<button type="button" class="mage-chip${v.status !== 'active' ? ' mage-dim' : ''}" data-mage-open="${esc(u.map(x => x.e.id).join(','))}" style="--mage-fam:${col}" title="${esc(hid ? t('unknown_spell') : effectTitle(e))}">`
+            + iconSvg(hid ? 'polymorph' : SPELLS[e.spell]?.icon, { size: 18, curse: isCurse(e) && !hid })
             + who + `<span class="mage-ell">${esc(chipText(v))}</span></button>`;
     };
     // In a shared chip, each person's condition button carries a small picture, so it's clear who it judges.
     // "Mira undoes it" stays in the window unless the AI thinks it happened (keeps the bar short).
     const conds = (u) => u.map(v => condButtons(v).filter(b => b.via !== 'caster' || sugFor(v, b))
-        .map(b => condBtnHtml(v, b, 'mage-cond', u.length > 1, sugFor(v, b))).join('')).join('');
+        .map(b => condBtnHtml(v, { ...b, label: b.short || b.label }, 'mage-cond', u.length > 1, sugFor(v, b))).join('')).join('');
     // Each chip is followed by its own condition buttons, so the one to press sits next to it.
     const shownHtml = units.slice(0, 2).map(u => chip(u) + conds(u)).join('');
     const rest = units.slice(2).flat().length;
@@ -263,7 +268,7 @@ function renderBar(list) {
     }
     const blue = famColor(FAMILIES.ward.color, barMode);
     let judgeBits = '';
-    if (dice) {
+    if (dice && !dice.sneak) {
         const tip = t('dice_t', { name: dice.name, jg: jg(dice.name), spell: dice.label, eul: eulOf(dice.spell, dice.variant) });
         judgeBits += `<span class="mage-dicepill" title="${esc(tip)}" aria-label="${esc(tip)}">🎲 <span class="mage-ell">${esc(dice.name)}</span></span>`;
     }
@@ -279,6 +284,7 @@ function renderBar(list) {
 
 // ---------- AI suggestions (2-B-1) ----------
 
+const LOCK = '<svg class="mage-lock" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>';
 const SPARK = '<svg class="mage-spark" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3l2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg>';
 
 function castSugCard(x) {
@@ -299,11 +305,27 @@ function castSugCard(x) {
     return `<div class="mage-sug-card${x.fits ? '' : ' mage-sug-dim'}">${head}${body}${why}<div class="mage-sug-btns">${btns}</div></div>`;
 }
 
+/** The AI judging thinks a secret ending happened: the answer is shown here, for this card only. */
+function secretSugCard(x, c) {
+    const e = x.v.e;
+    const head = `<div class="mage-sug-tt">${LOCK}<b class="mage-ell">${esc(t('sug_secret_t'))}</b></div>`;
+    const body = `<div class="mage-sug-txt">${esc(shownTitle(e))} · ${esc(targetName(e.target))}</div>`
+        + `<div class="mage-sug-reveal"><span class="mage-muted">${esc(t('sug_secret_rel'))}</span><b>${esc(c.real || '?')}</b></div>`;
+    const why = x.reason ? `<div class="mage-sug-why">${esc(t('sug_reason', { r: x.reason }))}</div>` : '';
+    const btns = `<button type="button" class="mage-btn mage-small mage-primary" data-mage-sug-apply="${esc(x.id)}"><span class="mage-ell">${esc(t('sug_apply_release'))}</span></button>`
+        + `<button type="button" class="mage-btn mage-small" data-mage-sug-done="${esc(x.id)}"><span class="mage-ell">${esc(t('sug_no'))}</span></button>`;
+    return `<div class="mage-sug-card">${head}${body}${why}<div class="mage-sug-btns">${btns}</div><div class="mage-sug-sub">${esc(t('sug_secret_no'))}</div></div>`;
+}
+
 function sugCard(x) {
     if (x.kind === 'cast') return castSugCard(x);
     const e = x.v.e;
+    if (x.kind === 'cond') {
+        const c = conditionsOf(x.v).find(y => y.what === x.what && (y.via || '') === (x.via || ''));
+        if (c?.secret) return secretSugCard(x, c);
+    }
     const name = targetName(e.target);
-    const head = `<div class="mage-sug-tt">${ini(e.target)}<b class="mage-ell">${esc(effectTitle(e))} — ${esc(name)}</b>`
+    const head = `<div class="mage-sug-tt">${ini(e.target)}<b class="mage-ell">${esc(shownTitle(e))} — ${esc(name)}</b>`
         + (x.kind === 'claim' && isMine(e) ? `<span class="mage-sug-tag">${esc(t('sug_mine'))}</span>` : '') + '</div>';
     const why = x.reason ? `<div class="mage-sug-why">${esc(t('sug_reason', { r: x.reason }))}</div>` : '';
     let body = '';
@@ -320,7 +342,7 @@ function sugCard(x) {
         btns = `<button type="button" class="mage-btn mage-small mage-primary" data-mage-sug-dispel="${esc(x.id)}"${block ? ' disabled' : ''}><span class="mage-ell">${esc(spellName('dispel') + tail)}</span></button>`
             + `<button type="button" class="mage-btn mage-small" data-mage-sug-done="${esc(x.id)}"><span class="mage-ell">${esc(t('sug_keep'))}</span></button>`;
     } else {
-        const src = sourceLabel(e.source);
+        const src = veiled(e) ? '???' : sourceLabel(e.source);
         body = (src ? `<div class="mage-sug-sub">${t('sug_source', { s: src })}</div>` : `<div class="mage-sug-sub">${esc(t('sug_source', { s: t('src_unknown') }))}</div>`)
             + `<div class="mage-sug-txt">${esc(t('sug_claim_other'))}<br>${esc(t('sug_how', { r: releaseLabel(e) }))}</div>`
             + (settings().strictRelease ? `<div class="mage-sug-sub">${esc(t('sug_strict'))}</div>` : '');
@@ -342,6 +364,7 @@ function sugApply(id) {
     const x = suggestions().find(s => s.id === id);
     if (!x) return changed();
     closeSuggestion(id);
+    if (x.kind === 'cond' && conditionsOf(x.v).find(y => y.what === x.what && (y.via || '') === (x.via || ''))?.secret) reveal(x.effectId);
     // The story already shows the character undoing it, so no "it ended" note goes out again.
     if (x.via === 'caster') storyShowsEnd(x.effectId, lastRef().key);
     doJudge(x.effectId, x.what, x.via || '');
@@ -491,6 +514,7 @@ function ago(ts) {
 }
 
 function actionLabel(a, e) {
+    if (veiled(e)) return `${t('unknown_spell')} → ${a.what === 'release' ? t('released_short') : '?'}`;
     if (a.type === 'cast') return `${e.source?.name || '?'} → ${effectTitle(e)}`;
     if (a.via === 'caster') return `${t('btn_caster_undo', { name: e.source?.name || '?', jg: jg(e.source?.name || '?') })} → ${t('released_short')}`;
     if (a.type === 'dispel') return `${spellName('dispel')} → ${effectTitle(e)}`;
@@ -527,6 +551,10 @@ function releaseLabel(e) {
     const r = e.release || { kind: 'dispel' };
     const br = SIMPLE[e.spell]?.breaker;
     const timed = Number(e.duration) > 0;
+    // A secret ending (2-C-1): only what is not secret shows (the turns, my own Dispel, a built-in breaker).
+    if (e.id && secretRelease(e)) {
+        return [veiled(e) ? '' : br?.rule[lang()], t('rel_secret'), timed && t('rel_time'), isMine(e) && t('rel_dispel')].filter(Boolean).join(' · ');
+    }
     if (br && r.kind === 'time' && !timed) return br.rule[lang()];
     const pre = br ? `${br.rule[lang()]} · ` : '';
     const by = e.source?.kind === 'character' ? ` · ${t('rel_caster', { name: e.source.name || '?', jg: jg(e.source.name || '?') })}` : '';
@@ -555,11 +583,12 @@ function stageCells(v) {
 function cardHtml(v, open) {
     const e = v.e;
     const s = settings();
-    const fam = SPELLS[e.spell]?.family || 'change';
-    const hide = e.surprise && v.status === 'pending';
+    const hide = (e.surprise && v.status === 'pending') || veiled(e);
+    const fam = hide ? 'change' : SPELLS[e.spell]?.family || 'change';
     const title = hide ? t('unknown_spell') : effectTitle(e);
-    const tags = [`<span class="mage-tag" style="--mage-fam:${famCol(fam)}">${esc(famName(fam))}</span>`];
-    if (e.method === 'stacked') tags.push(`<span class="mage-tag mage-tag-curse">${esc(t('method_stacked'))}</span>`);
+    // A hidden spell shows no family either (it would give the spell away).
+    const tags = hide ? [] : [`<span class="mage-tag" style="--mage-fam:${famCol(fam)}">${esc(famName(fam))}</span>`];
+    if (hide) { /* no curse badge */ } else if (e.method === 'stacked') tags.push(`<span class="mage-tag mage-tag-curse">${esc(t('method_stacked'))}</span>`);
     else if (e.method === 'curse') tags.push(`<span class="mage-tag mage-tag-curse">${esc(t('method_curse'))}</span>`);
     if (v.status === 'pending') tags.push(`<span class="mage-tag mage-tag-wait">${esc(t('st_pending'))}</span>`);
     if (v.status === 'ended') tags.push(`<span class="mage-tag mage-tag-wait">${esc(t('st_ending'))}</span>`);
@@ -572,7 +601,7 @@ function cardHtml(v, open) {
         if (!hide) {
             rows += row(t('r_source'), sourceLabel(e.source));
             rows += row(t('r_cause'), e.cause ? esc(e.cause) + (e.visibility === 'causeHidden' ? ` <span class="mage-muted">${esc(t('vis_causeHidden_short'))}</span>` : '') : '');
-        }
+        } else if (veiled(e)) rows += row(t('r_source'), '???');
         if (v.status === 'pending') rows += row(t('r_when'), esc(pendingText(v)));
         if (!hide) {
             if (e.method === 'stacked') rows += row(t('r_stage'), stageCells(v));
@@ -583,24 +612,38 @@ function cardHtml(v, open) {
                 rows += row(t('r_cannot'), st.cannot ? esc(st.cannot) : '');
             }
             if (e.method === 'stacked' && v.stage < STAGE_MAX) rows += row(t('r_next'), esc(t('next_stage', { cond: e.trigger?.text || '?', form: formText(e, L).name })));
-            rows += row(t('r_release'), esc(releaseLabel(e)));
-            if (v.status === 'active') rows += row(t('r_left'), esc(leftText(v)));
-            if (e.visibility === 'targetUnaware') rows += row(t('r_vis'), esc(t('vis_targetUnaware')));
         }
+        if (!hide || veiled(e)) {
+            rows += row(t('r_release'), releaseCell(e));
+            const ci = clueInfo(v);
+            if (ci) rows += row(t('r_clue'), esc(t(ci.next === 1 ? 'clue_info_1' : 'clue_info', { n: ci.given, k: ci.next })));
+            if (v.status === 'active') rows += row(t('r_left'), esc(leftText(v)));
+        }
+        if (!hide) {
+            if (e.visibility === 'targetUnaware') rows += row(t('r_vis'), esc(t('vis_targetUnaware')));
+            if (e.visibility === 'nobody') rows += row(t('r_vis'), `${esc(t('vis_nobody'))} <span class="mage-ctag mage-ctag-dim">${esc(t('vis_nobody_tag'))}</span>`);
+        }
+        if (v.status === 'active' && secretRelease(e)) rows += `<div class="mage-row mage-nodispel"><dd>${esc(t('secret_note'))}</dd></div>`;
         if (v.status === 'ended') rows += row(t('r_note'), esc(t('ending_note')));
         if (v.status !== 'ended' && !isMine(e)) {
-            const by = e.source?.kind === 'character' ? String(e.source.name || '?') : '';
+            const by = e.source?.kind === 'character' && !veiled(e) ? String(e.source.name || '?') : '';
             rows += `<div class="mage-row mage-nodispel"><dd>${esc(by ? t('no_dispel_char', { name: by, jg: jg(by) }) : t('no_dispel_note'))}</dd></div>`;
         }
     }
     const acts = open ? cardActs(v) : '';
     return `<div class="mage-card mage-st-${v.status}${open ? ' open' : ''}" data-id="${esc(e.id)}" style="--mage-fam:${famCol(fam)}">`
         + `<button type="button" class="mage-card-head" data-mage-toggle="${esc(e.id)}" aria-expanded="${open}">`
-        + framedIcon(hide ? 'polymorph' : SPELLS[e.spell]?.icon, { skin: s.skin, curse: isCurse(e) })
+        + framedIcon(hide ? 'polymorph' : SPELLS[e.spell]?.icon, { skin: s.skin, curse: isCurse(e) && !hide })
         + `<span class="mage-card-tt"><span class="mage-card-name mage-ell">${esc(title)}</span><span class="mage-tags">${tags.join('')}</span>`
         + (open ? '' : `<span class="mage-card-sub">${sub}</span>`) + '</span>'
         + `<span class="mage-caret">${open ? '▴' : '▾'}</span></button>`
         + (rows ? `<dl class="mage-rows">${rows}</dl>` : '') + acts + '</div>';
+}
+
+/** "How it ends", with a lock while it is a secret (2-C-1). */
+function releaseCell(e) {
+    if (secretRelease(e)) return `<span class="mage-secret">${LOCK}${esc(releaseLabel(e))}</span> <span class="mage-muted">${esc(t('rel_secret_tag'))}</span>`;
+    return esc(releaseLabel(e)) + (e.secretRelease && e.revealed ? ` <span class="mage-muted">${esc(t('revealed_tag'))}</span>` : '');
 }
 
 /** The buttons under an open card: condition buttons, Dispel (only magic I cast), and ⋯ → force clear. */
@@ -614,6 +657,9 @@ function cardActs(v) {
             const block = rs.on ? blockOf('dispel', 0, true, rs) : null;
             const tail = !rs.on ? '' : block ? ` · ${blockText(block)}` : ` ◆${costOf('dispel', 0)}`;
             h += `<button type="button" class="mage-btn mage-small" data-mage-dispel="${esc(e.id)}"${block ? ' disabled' : ''}>${iconSvg('dispel', { size: 16 })}<span class="mage-ell">${esc(spellName('dispel') + tail)}</span></button>`;
+        }
+        if (v.status === 'active' && (secretRelease(e) || veiled(e))) {
+            h += `<button type="button" class="mage-btn mage-small" data-mage-reveal="${esc(e.id)}"><span class="mage-ell">${esc(t('btn_reveal'))}</span></button>`;
         }
     }
     const more = ui.moreOpen === e.id;
@@ -664,6 +710,7 @@ function newDraft() {
         source: { kind: 'unknown', name: '' }, motive: '',
         trigger: { kind: 'now', turns: 2, chance: 25, text: '' },
         method: '', release: { kind: 'time', text: '' }, visibility: 'all', surprise: false,
+        secretRelease: false, clueEvery: 5, omen: false,
         cause: '', title: '', dispelWhat: '', touched: {},
     };
 }
@@ -879,6 +926,9 @@ function detailsHtml(d) {
         if (d.trigger.kind === 'condition') h += field(t('f_condition'), `<input class="mage-input" data-f="trigText" maxlength="40" value="${esc(d.trigger.text)}" placeholder="${esc(t('cond_ph'))}">`);
         if (d.trigger.kind !== 'now') {
             h += `<label class="mage-check"><input type="checkbox" data-f="surprise"${d.surprise ? ' checked' : ''}><span>${esc(t('surprise'))}</span></label>`;
+            // An omen: one small odd sign before it fires (2-C-1).
+            h += `<label class="mage-check"><input type="checkbox" data-f="omen"${d.omen ? ' checked' : ''}><span>${esc(t('omen'))}</span></label>`;
+            if (d.omen) h += `<div class="mage-hint">${esc(t(d.trigger.kind === 'turns' ? 'omen_hint_turns' : 'omen_hint_other'))}</div>`;
         }
     }
     const rels = isMine(d) ? RELEASES : ['time', ...RELEASES.filter(k => k !== 'dispel')];
@@ -886,6 +936,18 @@ function detailsHtml(d) {
     if (!['dispel', 'time'].includes(d.release.kind)) {
         h += field(d.release.kind === 'truth' ? t('rel_truth_text') : t('rel_action_text'),
             `<input class="mage-input" data-f="relText" maxlength="60" value="${esc(d.release.text)}" placeholder="${esc(t(d.release.kind === 'truth' ? 'rel_truth_ph' : 'rel_action_ph'))}">`);
+        // A secret ending (2-C-1): "???" on the card; found in the story, with clues now and then.
+        h += `<div class="mage-secretbox"><label class="mage-check"><input type="checkbox" data-f="secretRelease"${d.secretRelease ? ' checked' : ''}><span>${esc(t('secret_rel'))}</span></label>`;
+        if (d.secretRelease) {
+            const n = Number(d.clueEvery) || 0;
+            h += `<div class="mage-hint">${esc(t('secret_rel_hint'))}</div>`
+                + `<div class="mage-crow"><span class="mage-cl">${esc(t('clue_t'))}</span>`
+                + `<button type="button" class="mage-btn mage-small mage-cstep" data-mage-clue="-1" aria-label="−"${n <= 0 ? ' disabled' : ''}>−</button>`
+                + `<span class="mage-cval">${esc(n ? t('clue_every', { n }) : t('clue_off'))}</span>`
+                + `<button type="button" class="mage-btn mage-small mage-cstep" data-mage-clue="1" aria-label="+"${n >= 20 ? ' disabled' : ''}>+</button></div>`
+                + `<div class="mage-hint">${esc(t('clue_hint'))}</div>`;
+        }
+        h += '</div>';
     }
     h += field(t('f_vis'), sel('vis', VISIBILITY.map(k => [k, t(`vis_${k}`)]), d.visibility));
     h += field(t('f_turns_custom'), `<input class="mage-input mage-num" type="number" inputmode="numeric" min="1" max="99" data-f="customTurns" value="${DURATIONS.includes(Number(d.duration)) ? '' : esc(d.duration)}" placeholder="${esc(t('turns_ph'))}">`);
@@ -977,6 +1039,8 @@ function castersHtml() {
         + `<span class="mage-cl">${esc(t('c_b'))}<span class="mage-muted">${esc(t('c_b_sub'))}</span></span></label>`;
     if (conf.dice) {
         h += field(t('c_chance'), `<input class="mage-input mage-num" type="number" inputmode="numeric" min="1" max="100" data-mage-cchance value="${esc(conf.chance)}">`);
+        h += `<label class="mage-check mage-cdice mage-csneak"><input type="checkbox" data-mage-csneak${conf.sneak ? ' checked' : ''}>`
+            + `<span class="mage-cl">${esc(t('c_sneak'))}<span class="mage-muted">${esc(t('c_sneak_sub'))}</span></span></label>`;
     }
     return h + '</div>';
 }
@@ -1079,6 +1143,7 @@ export function describeSpec(d, L = lang()) {
         else if (tr.kind === 'chance') s += ko ? ` 턴마다 ${tr.chance}% 확률로 발동.` : ` ${tr.chance}% chance to fire each turn.`;
     }
     s += Number(d.duration) > 0 ? (ko ? ` ${d.duration}턴 지속.` : ` Lasts ${d.duration} turns.`) : (ko ? ' 풀릴 때까지 지속.' : ' Lasts until broken.');
+    if (d.secretRelease && ['truth', 'action'].includes(d.release?.kind)) s += ko ? ' 풀리는 법은 비밀.' : ' How it ends is a secret.';
     if (d.cause) s += ko ? ` 원인: ${d.cause}` : ` Cause: ${d.cause}`;
     return s;
 }
@@ -1112,10 +1177,23 @@ function bookFoot() {
 
 // ---------- actions ----------
 
-function doJudge(effectId, what, via = '') {
+function doJudge(effectId, what, via = '', checked = false) {
+    const v0 = views().find(x => x.e.id === effectId);
+    const c = v0 && conditionsOf(v0).find(x => x.what === what && (x.via || '') === (via || ''));
+    // A secret ending: one question first, and the answer only after (2-C-1).
+    if (c?.secret && !checked) {
+        confirmBox(t('secret_found_q')).then(ok => {
+            if (!ok) return;
+            reveal(effectId);
+            doJudge(effectId, what, via, true);
+            toast('info', t('toast_secret_found', { r: c.real || '?' }));
+        });
+        return;
+    }
     const a = judge(effectId, what, via);
     if (!a) return;
     const v = views().find(x => x.e.id === effectId);
+    if (c?.secret) { changed(); return; }
     if (v) {
         if (what === 'stack') toast('info', t('toast_stage', { stage: v.stage, label: v.stage ? STAGES[v.stage - 1].short[lang()] : '' }));
         else if (what === 'release') toast('info', t('toast_release'));
@@ -1160,10 +1238,19 @@ function doReload() {
     });
 }
 
+async function doReveal(effectId) {
+    const v = views().find(x => x.e.id === effectId);
+    if (!v) return;
+    const ok = await confirmBox(t(veiled(v.e) ? 'reveal_q_veiled' : 'reveal_q'));
+    if (!ok) return;
+    reveal(effectId);
+    changed();
+}
+
 async function doForce(effectId) {
     const v = views().find(x => x.e.id === effectId);
     if (!v) return;
-    const ok = await confirmBox(t('force_q', { title: effectTitle(v.e), name: targetName(v.e.target) }));
+    const ok = await confirmBox(t('force_q', { title: shownTitle(v.e), name: targetName(v.e.target) }));
     if (!ok) return;
     removeEffect(effectId); // gone as if it never happened: the AI is told nothing
     ui.moreOpen = null;
@@ -1193,6 +1280,10 @@ function buildSpec(d) {
         surprise: !!d.surprise && d.method !== 'stacked' && d.trigger.kind !== 'now',
         title: String(d.title || '').trim(),
     };
+    // 2-C-1: a secret ending needs a findable way (truth or an act); an omen needs a wait.
+    spec.secretRelease = !!d.secretRelease && ['truth', 'action'].includes(spec.release.kind);
+    spec.clueEvery = spec.secretRelease ? clueSteps(d.clueEvery) : 0;
+    spec.omen = !!d.omen && d.method !== 'stacked' && spec.trigger.kind !== 'now';
     fixRelease(spec);
     if (SIMPLE[d.spell]?.variants) spec.variant = d.variant || SIMPLE[d.spell].variants[0];
     if (SIMPLE[d.spell]?.needsX) spec.x = String(d.x || '').trim();
@@ -1202,6 +1293,12 @@ function buildSpec(d) {
             : { id: d.form.id };
     }
     return spec;
+}
+
+/** Clues: none, or every 2–20 turns. */
+function clueSteps(n) {
+    n = Math.round(Number(n) || 0);
+    return n < 2 ? 0 : Math.min(20, n);
 }
 
 function validate(d, forCard = false) {
@@ -1454,6 +1551,7 @@ function onWinClick(e) {
     if ((el = q('[data-mage-dispel]'))) return doDispel(el.dataset.mageDispel);
     if ((el = q('[data-mage-more]'))) { ui.moreOpen = ui.moreOpen === el.dataset.mageMore ? null : el.dataset.mageMore; return rerender(); }
     if ((el = q('[data-mage-force]'))) return doForce(el.dataset.mageForce);
+    if ((el = q('[data-mage-reveal]'))) return doReveal(el.dataset.mageReveal);
     if (q('[data-mage-reload]')) return doReload();
     if ((el = q('[data-mage-pick]'))) { setSpell(ui.draft, el.dataset.magePick); ui.draft.fromCard = false; return rerender(); }
     if (q('[data-mage-loadout]')) { ui.loadEdit = [...loadout()]; return rerender(); }
@@ -1474,6 +1572,12 @@ function onWinClick(e) {
         return changed();
     }
     if (q('[data-mage-undo]')) return doUndo();
+    if ((el = q('[data-mage-clue]'))) {
+        const n = clueSteps(ui.draft.clueEvery);
+        const up = Number(el.dataset.mageClue) > 0;
+        ui.draft.clueEvery = up ? (n === 0 ? 2 : Math.min(20, n + 1)) : (n <= 2 ? 0 : n - 1);
+        return rerender();
+    }
     if ((el = q('[data-mage-dur]'))) { ui.draft.duration = Number(el.dataset.mageDur); ui.draft.touched.duration = true; return rerender(); }
     if (q('[data-mage-details]')) { ui.details = !ui.details; return rerender(); }
     if (q('[data-mage-randform]')) { randomForm(); return rerender(); }
@@ -1497,6 +1601,7 @@ function onWinChange(e) {
         const av = ui.casterSel;
         // A focused box keeps the window from redrawing on refresh, so redraw here.
         if (e.target.matches('[data-mage-cdice]')) { setCaster(av, { dice: e.target.checked }); changed(); return rerender(); }
+        if (e.target.matches('[data-mage-csneak]')) { setCaster(av, { sneak: e.target.checked }); changed(); return rerender(); }
         if (e.target.matches('[data-mage-cchance]')) { setCaster(av, { chance: e.target.value }); changed(); return rerender(); }
         return;
     }
@@ -1535,6 +1640,8 @@ function onWinChange(e) {
         case 'relKind': d.release.kind = v; d.touched.release = true; break;
         case 'vis': d.visibility = v; return;
         case 'surprise': d.surprise = !!v; return;
+        case 'omen': d.omen = !!v; break;
+        case 'secretRelease': d.secretRelease = !!v; if (v && !clueSteps(d.clueEvery)) d.clueEvery = 5; break;
         case 'customTurns': {
             const n = Math.round(Number(v));
             if (n >= 1) { d.duration = Math.min(99, n); d.touched.duration = true; }
@@ -1584,7 +1691,7 @@ export function refresh() {
                 if (v.e.surprise) {
                     const what = v.e.spell === 'polymorph' ? `${spellName('polymorph')}: ${formLabel(v.e.form)}` : spellName(v.e.spell);
                     toast('info', t('fired_surprise', { what, dur: v.e.duration > 0 ? '???' : '∞' }));
-                } else toast('info', t('fired', { title: effectTitle(v.e) }));
+                } else toast('info', t('fired', { title: shownTitle(v.e) }));
                 ui.opened.add(v.e.id);
             }
         }

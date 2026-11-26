@@ -85,8 +85,15 @@ In the **Casters** tab, give each character of the chat spells of their own (eac
 - A character's spell works like magic you did not cast: no mana, no loadout, no Dispel. It ends when its turns run out, or when the character undoes it (AI judging notices that too).
 - It belongs to the reply it was cast in: re-roll or delete that reply and the spell is gone. **↶** also takes it back.
 - In **More**, you can also pick a character as the one who cast a spell yourself.
+- **Cast in secret** (with the dice): half of the hits are cast in secret. The AI does not show the casting, and the spell shows only as an unknown effect until you press **Show answer**.
 
 Both need AI judging to be on.
+
+### Secrets
+
+- **Keep how it ends a secret** (in **More**, when it ends by telling the truth or by an act): the card shows "???", and you find the way in the story. AI judging still knows it and tells you when it seems found; the answer shows on that card only. **Drop clues** sends the AI one small hint every few turns (2–20, or none). **Show answer** reveals it; the spell stays.
+- **Who knows → No one knows it is magic**: everyone in the story, the target too, takes it as odd, unexplained happenings.
+- **Send an omen before it fires** (for a spell that waits): one small odd sign goes to the AI, once: 1 turn before a delayed spell fires, or in the next reply for one that waits on a chance or a condition.
 
 ### Settings
 

@@ -12,12 +12,12 @@
 
 import { ctx, settings, save, chatState, currentChatId } from './store.js';
 import { SPELLS, SPELL_ORDER, SIMPLE, FORMS, MAX_EFFECTS } from './spells.js';
-import { chatView, posOf, turnsAfter, cast, castAction, views, liveCount } from './engine.js';
+import { chatView, posOf, turnsAfter, cast, castAction, views, liveCount, lastRef } from './engine.js';
 import { targetName, nameEn } from './describe.js';
 
 export const CASTER_SPELLS = SPELL_ORDER.filter(id => id !== 'dispel');
 export const CASTER_DURATIONS = [3, 5, 10];
-const DEFAULT = Object.freeze({ spells: [], every: 10, duration: 5, dice: false, chance: 15 });
+const DEFAULT = Object.freeze({ spells: [], every: 10, duration: 5, dice: false, chance: 15, sneak: false });
 
 function hash(str) {
     let h = 0x811c9dc5;
@@ -50,6 +50,7 @@ function clean(raw) {
     c.every = Math.min(50, Math.max(1, Math.round(Number(c.every) || DEFAULT.every)));
     c.duration = CASTER_DURATIONS.includes(Number(c.duration)) ? Number(c.duration) : DEFAULT.duration;
     c.dice = !!c.dice;
+    c.sneak = !!c.sneak; // only with the dice: a hit may be cast in secret (2-C-1)
     c.chance = Math.min(100, Math.max(1, Math.round(Number(c.chance) || DEFAULT.chance)));
     return c;
 }
@@ -175,8 +176,15 @@ function formFrom(detail, seed) {
  * it, so no "just happened" note goes out for it. One ↶ takes it back (`batch` groups several).
  * @returns {string|null} the new effect id
  */
-export function castByCharacter({ avatar, name, spell, variant = '', detail = '', target, batch = null }) {
+export function castByCharacter({ avatar, name, spell, variant = '', detail = '', target, batch = null, sneak = false }) {
     const conf = casterConf(avatar);
+    if (sneak) {
+        // Cast in secret for this reply already? (The reply event can come more than once.)
+        const here = lastRef().key;
+        const st0 = chatState();
+        if (here && st0?.effects.some(e => e.veiled && e.source?.avatar === avatar && e.anchor?.key === here)) return null;
+        if (castBlock(spell, target)) return null;
+    }
     const spec = {
         spell, duration: conf.duration, method: '',
         trigger: { kind: 'now', turns: 2, chance: 25, text: '' },
@@ -187,6 +195,8 @@ export function castByCharacter({ avatar, name, spell, variant = '', detail = ''
     if (SIMPLE[spell]?.variants) spec.variant = variant || SIMPLE[spell].variants[0];
     if (SIMPLE[spell]?.needsX) spec.x = String(detail || '').trim().slice(0, 60) || 'someone else';
     if (spell === 'polymorph') spec.form = formFrom(detail, hash(`${avatar}|${Date.now()}`));
+    // In secret: what it is, who cast it and how it ends stay hidden from me until I look.
+    if (sneak) { spec.veiled = true; spec.secretRelease = true; spec.clueEvery = 0; }
     const [id] = cast(spec, [target]);
     if (!id) return null;
     const st = chatState();
@@ -195,7 +205,8 @@ export function castByCharacter({ avatar, name, spell, variant = '', detail = ''
         e.strict = true;
         e.deliveries.cast = e.anchor?.key ?? null; // already written in the reply it was noticed in
     }
-    castAction([id], batch);
+    // A secret cast has no ↶ (the button would give it away); re-rolling the reply still takes it back.
+    if (!sneak) castAction([id], batch);
     save();
     return id;
 }
@@ -208,7 +219,7 @@ export function castByCharacter({ avatar, name, spell, variant = '', detail = ''
  * so a swipe keeps the same result.
  * @returns {{ avatar, name, spell, variant, target, text }|null}
  */
-export function rollDice(view, speakerAvatar, chatId = currentChatId()) {
+export function rollDice(view, speakerAvatar, chatId = currentChatId(), skipLast = false) {
     if (!chatId || !speakerAvatar || !view.length) return null;
     const u = view.length - 1;
     if (!view.list[u]?.is_user) return null;
@@ -219,7 +230,8 @@ export function rollDice(view, speakerAvatar, chatId = currentChatId()) {
     if ((hash(seed) % 10000) / 10000 >= conf.chance / 100) return null;
     const me = chatMembers().find(m => m.avatar === speakerAvatar);
     if (!me) return null;
-    const list = views({ chatId });
+    // On a re-roll, a spell from the reply being replaced does not count (it goes with that reply).
+    const list = views({ chatId, skipLast });
     const targets = [{ kind: 'user' }, ...chatMembers().filter(m => m.avatar !== speakerAvatar)];
     const options = [];
     for (const sp of conf.spells) for (const tg of targets) if (!castBlock(sp, tg, list)) options.push([sp, tg]);
@@ -227,12 +239,18 @@ export function rollDice(view, speakerAvatar, chatId = currentChatId()) {
     const [spell, target] = options[hash(`${seed}|pick`) % options.length];
     const variant = spell === 'luck' ? (hash(`${seed}|v`) % 2 ? 'bad' : 'good') : '';
     const spName = spell === 'luck' && variant === 'bad' ? 'Jinx' : nameEn({ spell });
+    // Cast in secret (2-C-1): half of the hits, when it is on.
+    const sneak = conf.sneak && hash(`${seed}|sneak`) % 2 === 0;
+    const form = FORMS[hash(`${seed}|f`) % FORMS.length];
     let what = briefEn(spell, variant);
-    if (spell === 'polymorph') what = `turns them into a ${FORMS[hash(`${seed}|f`) % FORMS.length].name.en} (or another animal that fits)`;
-    if (spell === 'glamour') what = 'changes only how they look (choose a look that fits the scene)';
+    let detail = '';
+    if (spell === 'polymorph') { what = sneak ? `turns them into a ${form.name.en}` : `turns them into a ${form.name.en} (or another animal that fits)`; detail = sneak ? form.id : ''; }
+    if (spell === 'glamour') { what = sneak ? 'makes them look like a stranger' : 'changes only how they look (choose a look that fits the scene)'; detail = sneak ? 'a stranger' : ''; }
     const who = targetName(target);
-    const text = `This turn, ${me.name} casts ${spName} on ${who}: it ${what}. Show ${me.name} casting it naturally in this reply, in character.`;
-    return { avatar: speakerAvatar, name: me.name, spell, variant, target, text };
+    const text = sneak
+        ? `This turn, ${me.name} secretly casts ${spName} on ${who}: it ${what}. Do not show the casting, do not name the spell and do not reveal who did it; only let its effect quietly begin in this reply.`
+        : `This turn, ${me.name} casts ${spName} on ${who}: it ${what}. Show ${me.name} casting it naturally in this reply, in character.`;
+    return { avatar: speakerAvatar, name: me.name, spell, variant, target, text, sneak, detail };
 }
 
 /** The dice that hit for the reply now being written or just written (shown as 🎲 on the bar). */

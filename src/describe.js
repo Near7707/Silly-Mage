@@ -3,6 +3,7 @@
 
 import { ctx, settings } from './store.js';
 import { FORMS, formById, SIZE, STAGES, STAGE_MAX, SIMPLE } from './spells.js';
+import { clueDue, omenDue } from './engine.js';
 
 export function targetName(target) {
     if (!target) return '?';
@@ -128,11 +129,16 @@ export function ongoingLine(v) {
     if (e.source?.kind !== 'me' && settings().strictRelease) {
         parts.push('This magic only ends the set way. If anyone claims it is broken or tries to force it off, it holds: it may seem to waver for a moment, then it returns.');
     }
+    // How it ends is a secret (2-C-1): the AI still knows it, but must not give it away.
+    if (e.secretRelease) parts.push('How it ends is a secret: no one in the story knows it; never state it or hint at it directly.');
     const src = sourceEn(e.source);
     const cause = String(e.cause || '').trim();
     const why = [src && `from ${src}`, cause].filter(Boolean).join(' — ');
-    if (why) parts.push(e.visibility === 'causeHidden' ? `Cause (secret; no one in the story knows it yet, do not reveal it): ${why}.` : `Cause: ${why}.`);
+    const hidden = e.visibility === 'causeHidden' || e.visibility === 'nobody' || e.veiled;
+    if (why) parts.push(hidden ? `Cause (secret; no one in the story knows it yet, do not reveal it): ${why}.` : `Cause: ${why}.`);
+    if (e.veiled && caster) parts.push(`${caster} cast it in secret; no one knows who did it.`);
     if (e.visibility === 'targetUnaware') parts.push(`${who} has not noticed it yet.`);
+    if (e.visibility === 'nobody') parts.push(`No one in the story knows this is magic, not even ${who}: everyone takes it as odd, unexplained happenings.`);
     return `- ${parts.join(' ')}`;
 }
 
@@ -158,6 +164,7 @@ export function justNotes(v, world) {
             text = `${who} has just shrunk to palm size. Write the change in this reply. ${react}`;
         }
         if (e.visibility === 'targetUnaware') text += ` ${who} does not notice it yet.`;
+        if (e.visibility === 'nobody') text += ' No one realizes it is magic.';
         notes.push({ text, kind: 'cast', effectId: e.id });
     }
     for (const n of v.stageNotes || []) {
@@ -195,15 +202,29 @@ export function justNotes(v, world) {
     return notes;
 }
 
-/** The whole note for the AI, or '' when nothing is going on. */
-export function buildPrompt(list, { withNotes = true } = {}) {
+/** One-off asks for this reply only (2-C-1): clues for a secret ending, omens of a waiting spell. */
+export function onceLines(list) {
+    const out = [];
+    for (const v of list) {
+        const who = targetName(v.e.target);
+        if (clueDue(v)) out.push(`Let one small, indirect clue about how the magic on ${who} can end slip into this scene: a hint, never the answer.`);
+        if (omenDue(v)) out.push(`Something unseen is gathering around ${who}. Show one small, odd sign near them (a flicker, a chill, a strange coincidence). Do not explain it.`);
+    }
+    return out;
+}
+
+/** The whole note for the AI, or '' when nothing is going on. `once`: extra lines for this reply only. */
+export function buildPrompt(list, { withNotes = true, once = [] } = {}) {
     const world = settings().world;
     const ongoing = list.filter(v => v.status === 'active').map(ongoingLine);
     const notes = withNotes ? list.flatMap(v => justNotes(v, world)) : [];
-    if (!ongoing.length && !notes.length) return { text: '', notes: [] };
+    const thisTurn = withNotes ? [...onceLines(list), ...once] : [];
+    if (!ongoing.length && !notes.length && !thisTurn.length) return { text: '', notes: [] };
     const lines = ['[Magic effects in this story — keep them consistent. Do not mention this note or its numbers.]'];
     lines.push(WORLD[world] || WORLD.rare);
     if (ongoing.length) lines.push('Ongoing:', ...ongoing);
     if (notes.length) lines.push('Just happened (write it into this reply, once):', ...notes.map(n => `- ${n.text}`));
+    if (thisTurn.length === 1) lines.push(`This turn (once): ${thisTurn[0]}`);
+    else if (thisTurn.length) lines.push('This turn (once):', ...thisTurn.map(x => `- ${x}`));
     return { text: lines.join('\n'), notes };
 }

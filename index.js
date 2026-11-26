@@ -5,7 +5,7 @@
 import { t, setLanguage } from './src/i18n.js';
 import { ctx, settings, uiLang, onChatRenamed, onChatDeleted, currentChatId } from './src/store.js';
 import { views, setSent, markDelivered, copyFromParent, chatView } from './src/engine.js';
-import { rollDice, setDice } from './src/casters.js';
+import { rollDice, setDice, getDice, castByCharacter } from './src/casters.js';
 import { buildPrompt } from './src/describe.js';
 import { MAGE_GLYPH } from './src/icons.js';
 import { VERSION, prefsHtml, prefsClick, prefsChange, prefsFocus, setPrefsHooks } from './src/prefs.js';
@@ -30,13 +30,12 @@ function updatePrompt(genType = pendingGen, live = false) {
         const type = String(genType || '');
         const skipLast = ['swipe', 'regenerate', 'continue'].includes(type);
         const withNotes = !['quiet', 'impersonate'].includes(type);
-        const built = buildPrompt(views({ skipLast }), { withNotes });
+        // B. The dice: a character may cast this turn (only for a new reply to my message, or a re-roll of it).
+        const dice = withNotes && ['normal', 'swipe', 'regenerate'].includes(type) && s.judgeMode !== 'off' ? diceFor(skipLast) : null;
+        const built = buildPrompt(views({ skipLast }), { withNotes, once: dice ? [dice.text] : [] });
         text = built.text;
         if (live) setSent(withNotes ? built.notes : []);
-        // B. The dice: a character may cast this turn (only for a new reply to my message, or a re-roll of it).
-        const dice = ['normal', 'swipe', 'regenerate'].includes(type) && s.judgeMode !== 'off' ? diceFor(skipLast) : null;
-        if (dice) text = (text ? `${text}\n` : `[Magic in this story. Do not mention this note.]\n`) + `This turn (once): ${dice.text}`;
-        if (live) setDice(dice ? { chatId: currentChatId(), name: dice.name, spell: dice.spell, variant: dice.variant,
+        if (live) setDice(dice ? { ...dice, chatId: currentChatId(),
             label: t(dice.spell === 'luck' && dice.variant === 'bad' ? 'spell_jinx' : `spell_${dice.spell}`) } : null);
     }
     try {
@@ -54,7 +53,21 @@ function diceFor(skipLast) {
         if (c.groupId) avatar = speaker;
         else if (c.characterId !== undefined) avatar = c.characters?.[c.characterId]?.avatar || null;
     } catch { /* ignore */ }
-    try { return rollDice(chatView(skipLast), avatar); } catch (e) { console.error('[Mage] dice', e); return null; }
+    try { return rollDice(chatView(skipLast), avatar, currentChatId(), skipLast); } catch (e) { console.error('[Mage] dice', e); return null; }
+}
+
+/**
+ * A character cast in secret (2-C-1): the story does not show it, so the AI judging cannot
+ * notice it. It goes in as soon as the reply it was asked for arrives, bound to that reply
+ * (re-roll it and the spell is gone; the same roll comes back with the re-roll).
+ */
+function sneakCast(mesId) {
+    const d = getDice(currentChatId());
+    if (!d?.sneak) return;
+    const list = ctx().chat || [];
+    const m = list[Number(mesId)];
+    if (!m || m.is_user || m.is_system || Number(mesId) !== list.length - 1) return;
+    castByCharacter({ ...d, sneak: true });
 }
 
 // ---------- refreshing ----------
@@ -158,7 +171,7 @@ function registerEvents() {
         ev.USER_MESSAGE_RENDERED, ev.CHARACTER_MESSAGE_RENDERED, ev.MORE_MESSAGES_LOADED, ev.CHAT_LOADED, ev.MESSAGE_SENT]) {
         on(name, refreshSoon);
     }
-    on(ev.MESSAGE_RECEIVED, (mesId) => { markDelivered(mesId); refreshSoon(); checkSoon(); });
+    on(ev.MESSAGE_RECEIVED, (mesId) => { markDelivered(mesId); sneakCast(mesId); refreshSoon(); checkSoon(); });
     on(ev.GENERATION_STARTED, (type, _opts, dryRun) => {
         if (!dryRun) { pendingGen = String(type || 'normal'); generating = true; }
         updatePrompt(dryRun ? type : pendingGen, !dryRun);

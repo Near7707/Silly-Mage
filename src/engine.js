@@ -115,6 +115,7 @@ export function evaluate(e, view, actions) {
 
     const dispelled = mine.find(a => a.type === 'dispel');
     if (out.activeFrom === null) {
+        out.waited = turnsAfter(view, anchor).length; // replies since it was cast (for the omen)
         // Still waiting. A dispel removes it anyway.
         if (dispelled) { out.status = 'ended'; out.endReason = 'dispel'; out.silentEnd = true; }
         return out;
@@ -384,3 +385,34 @@ export function copyFromParent() {
 }
 
 export function spellOf(e) { return SPELLS[e.spell] || SPELLS.polymorph; }
+
+// ---------- secrets (2-C-1) ----------
+
+/** How it ends is hidden from me (until I look, or it is found). */
+export const secretRelease = (e) => !!e?.secretRelease && !e.revealed;
+/** A spell cast in secret: what it is and who cast it are hidden from me too. */
+export const veiled = (e) => !!e?.veiled && !e.revealed;
+
+/** Clues for a secret ending: { given, next } (next = replies until the next clue), or null. */
+export function clueInfo(v) {
+    const n = Number(v?.e?.clueEvery) || 0;
+    if (!v?.e?.secretRelease || n < 2 || v.status !== 'active') return null;
+    return { given: Math.floor(v.used / n), next: n - (v.used % n) };
+}
+
+/** Does the reply about to be written carry a clue? */
+export const clueDue = (v) => clueInfo(v)?.next === 1;
+
+/** Does the reply about to be written carry the omen of a waiting spell? */
+export function omenDue(v) {
+    if (!v?.e?.omen || v.status !== 'pending') return false;
+    if (v.e.trigger?.kind === 'turns') return v.pendingLeft === 1;
+    return v.waited === 0; // a chance or a condition: right after it was cast
+}
+
+export function reveal(effectId) {
+    const e = chatState()?.effects.find(x => x.id === effectId);
+    if (!e) return;
+    e.revealed = true;
+    save();
+}

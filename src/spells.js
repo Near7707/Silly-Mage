@@ -184,7 +184,7 @@ export const SOURCES = ['unknown', 'object', 'place', 'me', 'character', 'tricks
 export const MOTIVES = ['', 'prank', 'punishment', 'mistake', 'pact', 'trial', 'accident'];
 export const TRIGGERS = ['now', 'turns', 'chance', 'condition'];
 export const RELEASES = ['dispel', 'truth', 'action'];
-export const VISIBILITY = ['all', 'targetUnaware', 'causeHidden'];
+export const VISIBILITY = ['all', 'targetUnaware', 'causeHidden', 'nobody'];
 export const METHODS = ['', 'curse', 'stacked'];
 export const DURATIONS = [3, 5, 10, 0]; // 0 = no end
 export const MAX_EFFECTS = 4;

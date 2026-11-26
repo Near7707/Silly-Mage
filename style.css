@@ -475,3 +475,13 @@
 }
 .mage-sug-card.mage-sug-dim { border: 1px dashed var(--mage-border); }
 .mage-sug-card.mage-sug-dim .mage-sug-btns .mage-btn:first-child { border-color: var(--mage-fam); color: var(--mage-fam); }
+
+/* ---------- 2-C-1 secrets ---------- */
+.mage-lock { flex: 0 0 auto; vertical-align: -2px; color: var(--mage-accent); }
+.mage-secret { display: inline-flex; align-items: center; gap: 5px; font-weight: 700; letter-spacing: 1px; }
+.mage-secretbox { display: flex; flex-direction: column; gap: 6px; padding: 8px 9px; border: 1px solid var(--mage-border); border-radius: 9px; background: var(--mage-surface2); }
+.mage-secretbox .mage-check { margin: 0; }
+.mage-sug-reveal { display: flex; flex-direction: column; gap: 2px; font-size: 13px; line-height: 1.45; background: var(--mage-surface2); border-radius: 7px; padding: 7px 8px; }
+.mage-sug-reveal .mage-muted { font-size: 11.5px; }
+.mage-ctag.mage-ctag-dim { color: var(--mage-muted); border-color: var(--mage-border); }
+.mage-check.mage-csneak { padding-left: 24px; }
