@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Mage test page</title>
+<link rel="stylesheet" href="/style.css">
+<style>
+  body { margin: 0; font-family: system-ui, sans-serif; height: 100dvh; display: flex; flex-direction: column; }
+  #fake_top { display: flex; gap: 6px; padding: 6px; flex-wrap: wrap; align-items: center; font-size: 13px; }
+  #fake_top button { height: 30px; }
+  #chat { flex: 1; overflow-y: auto; padding: 8px; }
+  #chat .mes { padding: 4px 0; border-bottom: 1px solid #8884; }
+  #form_sheld { padding: 6px; }
+  #send_form { display: flex; gap: 6px; }
+  #send_textarea { flex: 1; font-size: 16px; height: 38px; }
+  #side { display: flex; gap: 8px; flex-wrap: wrap; }
+  #extensionsMenu { border: 1px solid #888; width: 160px; margin: 6px; }
+  #extensions_settings2 { width: 360px; margin: 6px; }
+  #extensions_settings2 .inline-drawer-content { display: block; }
+  #prompt_out { white-space: pre-wrap; font: 12px monospace; margin: 6px; padding: 6px; border: 1px dashed #888; max-height: 180px; overflow: auto; }
+  .text_pole { width: 100%; }
+  .menu_button { padding: 0 10px; }
+</style>
+<style id="theme_override"></style>
+</head>
+<body>
+<div id="fake_top">
+  <b>Fake SillyTavern</b>
+  <button id="btn_turn">send turn</button>
+  <button id="btn_swipe">swipe last</button>
+  <button id="btn_del">delete last</button>
+  <button id="btn_branch">branch</button>
+</div>
+<details id="side_box"><summary>menu · settings · prompt</summary>
+<div id="side">
+  <div id="extensionsMenu"></div>
+  <div id="extensions_settings2"></div>
+</div>
+<div id="prompt_out">(nothing sent)</div>
+</details>
+<div id="chat"></div>
+<div id="form_sheld">
+  <div id="send_form"><textarea id="send_textarea" placeholder="Type a message"></textarea></div>
+</div>
+<script src="/test/fake-st.js"></script>
+<script type="module">
+  window.__mageBoot();
+  await import('/index.js');
+  await window.__fakeST.ctx.eventSource.emit('app_ready');
+  window.__mageLoaded = true;
+</script>
+</body>
+</html>

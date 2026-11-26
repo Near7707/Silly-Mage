@@ -1,0 +1,220 @@
+// Every piece of on-screen text, in one place. English is the base; Korean is optional.
+// (What the AI is sent is always English and lives in describe.js.)
+
+export const LANGUAGES = [
+    { id: 'en', label: 'English' },
+    { id: 'ko', label: '한국어' }, // never translated, so it can be found from the English screen
+];
+
+const EN = {
+    ext_name: 'Mage',
+    // status bar / window
+    open_status: 'Open the status window', undo: 'Undo', undone: 'Undid the last action.',
+    collapse: 'Fold', expand: 'Unfold', close: 'Close', turned_off: 'Mage is turned off in its settings.',
+    tab_status: 'Status {n}/{max}', tab_cast: 'Cast', tab_book: 'Spellbook',
+    sum: 'Effects {n}/{max}',
+    no_chat: 'Open a chat first.',
+    empty_status: 'No spells are active in this chat.',
+    cast_one: '✦ Cast a spell', cast_spell: 'Cast a spell', cast: 'Cast',
+    recent: 'Recent', just_now: 'just now', min_ago: '{n} min ago', hour_ago: '{n} h ago', day_ago: '{n} d ago',
+    fired_short: 'fired', released_short: 'broken',
+    // spells & families
+    spell_polymorph: 'Polymorph', spell_titan: 'Titan', spell_mite: 'Mite', spell_dispel: 'Dispel',
+    desc_polymorph: 'Turns the target into another creature. What they can and cannot do changes with the form.',
+    desc_titan: 'The body grows. Same shape, only bigger.',
+    desc_mite: 'The body shrinks. Same shape, only smaller.',
+    desc_dispel: 'Removes one effect, or every effect of one family.',
+    fam_change: 'Change', fam_ward: 'Ward', fam_mind: 'Mind', fam_illusion: 'Illusion',
+    fam_fate: 'Fate', fam_time: 'Space & Time', fam_boost: 'Boost', fam_summon: 'Summon',
+    curse: 'Curse', curse_of: 'Curse: {cond}', unknown_spell: '??? Unknown spell',
+    method_none: 'None', method_curse: 'Curse', method_stacked: 'Curse · Stacking',
+    method_hint_curse: 'Fires when the condition happens. Shown with a red eye.',
+    method_hint_stacked: 'Each time the condition happens: ears → tail → no words → full change.',
+    // chips & cards
+    chip_in: '⏳ in {n}', chip_wait: '⏳ waiting', chip_ending: 'ending', chip_turns: '{n}t',
+    st_pending: 'Waiting', st_ending: 'Ends next reply',
+    left_n: '{n} turns left', left_none: 'No time limit', left_unknown: '??? turns',
+    pend_turns: 'Fires in {n} turns', pend_chance: '{p}% chance each turn', pend_cond: 'Fires when: {cond}',
+    r_target: 'Target', r_source: 'From', r_cause: 'Cause', r_when: 'When', r_stage: 'Stage', r_look: 'Now',
+    r_can: 'Can', r_cannot: 'Cannot', r_next: 'Next', r_release: 'Ends by', r_left: 'Time', r_vis: 'Who knows', r_note: 'Note',
+    look_none: 'No visible change yet', next_stage: 'one step closer to a {form} each time "{cond}" happens',
+    ending_note: 'The next reply will show them back to normal.',
+    cond: 'Condition met', btn_truth: '✔ Told the truth',
+    judge_stack: 'Press when the condition happened in the story', judge_release: 'Press when this happened in the story — it breaks the spell',
+    judge_trigger: 'Press when the condition happened in the story — the spell fires',
+    toast_stage: 'Curse moved on: stage {stage} ({label}).', toast_release: 'The spell breaks in the next reply.',
+    toast_trigger: 'The spell fires in the next reply.', toast_dispel: 'Dispelled: {title}', toast_dispel_n: 'Dispelled {n} effect(s).',
+    toast_cast: 'Cast: {title}', toast_cast_secret: 'Something was cast… you will see when it fires.',
+    fired: 'It fired: {title}', fired_surprise: 'Unknown effect activated — {what}, Duration: {dur}',
+    // cast form
+    f_target: 'Who', f_spell: 'What', f_duration: 'How long', f_form: 'Form', f_form_final: 'Final form',
+    tg_me: 'Me', tg_both: 'Both', tg_random: '🎲 Random',
+    form_custom: 'Type my own…', form_random: 'Random form', form_rolled: 'Rolled: {form}',
+    form_name: 'Form name', form_name_ph: 'e.g. penguin', ai_fill: '✨ Fill in', ai_wait: 'Thinking…',
+    dur_n: '{n} turns', dur_none: 'No end', dur_none_hint: 'Ends only by: {r}', dur_custom_now: 'Now: {n} turns (set under More)',
+    f_condition: 'Condition', cond_ph: 'e.g. 💧 touched water',
+    details: 'More', f_source: 'From', f_source_name: 'Name', src_name_ph: 'Empty = 🎲',
+    src_unknown: 'Unknown', src_object: 'Object', src_place: 'Place', src_me: 'Me', src_trickster: 'Trickster',
+    f_motive: 'Why', mot_none: '—', mot_prank: 'Prank', mot_punishment: 'Punishment', mot_mistake: 'Mistake',
+    mot_pact: 'Pact', mot_trial: 'Trial', mot_accident: 'Accident',
+    mot_hint_prank: 'Suggests: short and light (3 turns).', mot_hint_punishment: 'Suggests: fires when a rule is broken; telling the truth breaks it.',
+    mot_hint_mistake: 'Suggests: 5 turns, ends by Dispel.', mot_hint_pact: 'Suggests: a reward with a price; ends by an act.',
+    mot_hint_trial: 'Suggests: no end until the task is done.', mot_hint_accident: 'Suggests: a chance each turn to go off.',
+    f_method: 'Style', f_trigger: 'When',
+    trig_now: 'Right now', trig_turns: 'After some turns', trig_chance: 'A chance each turn', trig_condition: 'When a condition happens',
+    trig_turns_n: 'Turns until it fires', trig_chance_p: 'Chance each turn (%)',
+    surprise: 'Hide the details from me until it fires',
+    f_release: 'How it ends', rel_dispel: 'Dispel', rel_truth: 'Telling the truth', rel_action: 'A certain act',
+    rel_truth_about: 'Telling the truth about {x}', rel_truth_text: 'About what (optional)', rel_action_text: 'Which act',
+    rel_truth_ph: 'e.g. the broken vase', rel_action_ph: 'e.g. a kiss on the forehead',
+    f_vis: 'Who knows', vis_all: 'Everyone', vis_targetUnaware: 'The target has not noticed', vis_causeHidden: 'No one knows why',
+    vis_causeHidden_short: '(secret)',
+    f_turns_custom: 'Turns (custom)', turns_ph: '1–99',
+    cause_ph: 'Why it happened (optional)', cause_roll: '🎲 Cause', cause_wait: 'Thinking of a cause…',
+    apply: 'Use it', again: 'Again', save_as_card: 'Save as a Spellbook card',
+    f_dispel_what: 'Remove', dispel_family: 'Every {fam} spell', nothing_dispel: 'Nothing to dispel on {name}.',
+    need_form: 'Type a form name first.', need_cond: 'Write the condition first.', need_action: 'Write which act breaks it.',
+    need_target: 'Pick who it is for.', full: 'Up to {max} effects at once. Dispel one first.',
+    clash: '{name} already has {title}. Dispel it first.',
+    ai_empty: 'The AI sent back an empty answer. Try again, or pick another connection profile in the settings.',
+    ai_fail: 'The AI request failed: {msg}', ai_no_profile_api: "This SillyTavern version can't send requests with a connection profile.",
+    // Spellbook
+    book_empty: 'No cards yet.', load: 'Load', edit: 'Edit', new_card: 'New card', editing_card: 'Editing a card',
+    card_name: 'Card name', card_name_ph: 'e.g. Curse of Water', save: 'Save', delete: 'Delete', cancel: 'Cancel',
+    card_saved: 'Card saved.', card_delete_q: 'Delete the card "{name}"?',
+    timing_now: 'Instant', timing_turns: 'Delayed', timing_chance: 'Chance', timing_condition: 'Condition', kind_stacked: 'Stacking',
+    seed_water: 'Curse of Water', seed_water_cond: '💧 touched water', seed_turtle: 'Turtle Prank', seed_pocket: 'Pocket Size',
+    // settings panel
+    set_hint: 'Magic events for your chat: who cast it, why and when — kept in mind every turn.',
+    set_open: 'Open Mage', set_enabled: 'Turn on Mage', set_language: 'Language', set_skin: 'Look',
+    skin_theme: 'Default (follow theme)', skin_tome: 'Old tome', skin_cursed: 'Cursed book',
+    set_world: 'Magic in this world', world_common: 'Common (fantasy)', world_rare: 'Rare (modern)', world_none: 'None',
+    world_hint_common: 'People take magic in stride.', world_hint_rare: 'People are surprised and look for an explanation.',
+    world_hint_none: 'No one understands it — a strange, inexplicable event.',
+    set_trickster: 'Allow "Trickster" as a source (fairies and such; may not fit modern stories)',
+    set_pool: '🎲 Random forms come from', set_pool_hint: 'Nothing checked = all forms.',
+    set_ai: 'AI for 🎲 Cause and "Fill in"', set_profile: 'Connection profile', set_profile_current: '(Use current API)',
+    set_profile_missing: '⚠️ Profile not found — pick again', set_preset: "Send the connection profile's preset too",
+    set_preset_hint: 'Off by default. A roleplay preset can make the AI answer in character.',
+    set_reasoning: 'Thinking effort', reasoning_default: 'Model default', reasoning_low: 'Low', reasoning_medium: 'Medium', reasoning_high: 'High',
+    set_context: 'Recent messages the 🎲 cause reads', set_reset_pos: 'Reset window position', pos_reset: 'Window moved back.',
+    set_backup: 'Backup', set_export: 'Export', set_import: 'Import', imported: 'Backup loaded.', import_fail: 'That file is not a Mage backup.',
+    import_q: 'Replace all Mage data (effects, Spellbook, settings) with this backup?',
+    version: 'Version {v}',
+};
+
+const KO = {
+    ext_name: 'Mage',
+    open_status: '상태창 열기', undo: '되돌리기', undone: '마지막 판정을 되돌렸어요.',
+    collapse: '접기', expand: '펼치기', close: '닫기', turned_off: '설정에서 Mage가 꺼져 있어요.',
+    tab_status: '상태 {n}/{max}', tab_cast: '걸기', tab_book: 'Spellbook',
+    sum: '걸린 효과 {n}/{max}',
+    no_chat: '먼저 채팅방을 열어 주세요.',
+    empty_status: '이 채팅방에 걸린 주문이 없어요.',
+    cast_one: '✦ 주문 걸기', cast_spell: '주문 걸기', cast: '걸기',
+    recent: '최근 판정', just_now: '방금', min_ago: '{n}분 전', hour_ago: '{n}시간 전', day_ago: '{n}일 전',
+    fired_short: '발동', released_short: '풀림',
+    spell_polymorph: 'Polymorph', spell_titan: 'Titan', spell_mite: 'Mite', spell_dispel: 'Dispel',
+    desc_polymorph: '대상을 다른 생물로 바꾼다. 형태에 따라 할 수 있는 것과 못 하는 것이 바뀐다.',
+    desc_titan: '몸이 커진다. 모양은 그대로, 크기만 바뀐다.',
+    desc_mite: '몸이 작아진다. 모양은 그대로, 크기만 바뀐다.',
+    desc_dispel: '걸린 효과 하나, 또는 한 계열의 효과를 모두 없앤다.',
+    fam_change: '변화', fam_ward: '보호·해제', fam_mind: '정신', fam_illusion: '환영·시야',
+    fam_fate: '운명', fam_time: '시공', fam_boost: '강화', fam_summon: '소환·설치',
+    curse: '저주', curse_of: '저주: {cond}', unknown_spell: '??? 정체불명의 주문',
+    method_none: '없음', method_curse: '저주', method_stacked: '저주 · 중첩형',
+    method_hint_curse: '조건이 맞으면 발동한다. 붉은 눈 표시가 붙는다.',
+    method_hint_stacked: '조건이 맞을 때마다 귀 → 꼬리 → 말 못 함 → 완전 변이.',
+    chip_in: '⏳ {n}턴 뒤', chip_wait: '⏳ 대기', chip_ending: '풀리는 중', chip_turns: '{n}턴',
+    st_pending: '대기 중', st_ending: '다음 답변에 풀림',
+    left_n: '{n}턴 남음', left_none: '무기한', left_unknown: '???턴',
+    pend_turns: '{n}턴 뒤 발동', pend_chance: '턴마다 {p}% 확률로 발동', pend_cond: '발동 조건: {cond}',
+    r_target: '대상', r_source: '건 쪽', r_cause: '원인', r_when: '발동', r_stage: '단계', r_look: '지금 모습',
+    r_can: '할 수 있음', r_cannot: '할 수 없음', r_next: '다음', r_release: '풀리는 법', r_left: '남은 턴', r_vis: '누가 앎', r_note: '알림',
+    look_none: '아직 겉으로 드러난 변화 없음', next_stage: '“{cond}” 때마다 한 단계씩 {form}에 가까워짐',
+    ending_note: '다음 답변에서 원래 모습으로 돌아와요.',
+    cond: '조건 맞음', btn_truth: '✔ 진실을 말함',
+    judge_stack: '이야기 속에서 조건이 일어났을 때 누르기', judge_release: '이야기 속에서 이 일이 일어났을 때 누르기 — 주문이 풀림',
+    judge_trigger: '이야기 속에서 조건이 일어났을 때 누르기 — 주문이 발동함',
+    toast_stage: '저주가 한 단계 진행됐어요: {stage}단계 ({label})', toast_release: '다음 답변에서 주문이 풀려요.',
+    toast_trigger: '다음 답변에서 주문이 발동해요.', toast_dispel: 'Dispel: {title}', toast_dispel_n: '효과 {n}개를 없앴어요.',
+    toast_cast: '걸었어요: {title}', toast_cast_secret: '무언가가 걸렸어요… 발동하면 알게 돼요.',
+    fired: '발동했어요: {title}', fired_surprise: '정체불명의 효과 발동 — {what}, 지속: {dur}',
+    f_target: '누구에게', f_spell: '무엇을', f_duration: '얼마나', f_form: '형태', f_form_final: '완전 변이 형태',
+    tg_me: '나', tg_both: '둘 다', tg_random: '🎲 무작위',
+    form_custom: '직접 입력…', form_random: '무작위 형태', form_rolled: '뽑힌 형태: {form}',
+    form_name: '형태 이름', form_name_ph: '예: 펭귄', ai_fill: '✨ 채우기', ai_wait: '생각 중…',
+    dur_n: '{n}턴', dur_none: '무기한', dur_none_hint: '풀리는 법: {r}', dur_custom_now: '지금: {n}턴 (자세히에서 바꿈)',
+    f_condition: '조건', cond_ph: '예: 💧 물에 닿음',
+    details: '자세히', f_source: '누가 (건 쪽)', f_source_name: '이름', src_name_ph: '비우면 🎲',
+    src_unknown: '정체불명', src_object: '물건', src_place: '장소', src_me: '나', src_trickster: '장난꾼',
+    f_motive: '왜', mot_none: '—', mot_prank: '장난', mot_punishment: '벌', mot_mistake: '실수',
+    mot_pact: '계약', mot_trial: '시험', mot_accident: '사고',
+    mot_hint_prank: '추천: 짧고 가볍게 (3턴).', mot_hint_punishment: '추천: 규칙을 어기면 발동, 진실을 말하면 풀림.',
+    mot_hint_mistake: '추천: 5턴, Dispel로 풀림.', mot_hint_pact: '추천: 보상과 대가, 특정 행동으로 풀림.',
+    mot_hint_trial: '추천: 과제를 해낼 때까지 무기한.', mot_hint_accident: '추천: 턴마다 확률로 터짐.',
+    f_method: '방식', f_trigger: '언제',
+    trig_now: '즉시', trig_turns: '몇 턴 뒤', trig_chance: '턴마다 확률', trig_condition: '조건이 맞으면',
+    trig_turns_n: '발동까지 턴 수', trig_chance_p: '턴마다 확률 (%)',
+    surprise: '발동할 때까지 나에게도 내용 숨기기',
+    f_release: '풀리는 법', rel_dispel: 'Dispel', rel_truth: '진실 말하기', rel_action: '특정 행동',
+    rel_truth_about: '{x}에 대해 진실 말하기', rel_truth_text: '무엇에 대해 (비워도 됨)', rel_action_text: '어떤 행동',
+    rel_truth_ph: '예: 깨진 꽃병', rel_action_ph: '예: 이마에 입맞춤',
+    f_vis: '누가 앎', vis_all: '모두 앎', vis_targetUnaware: '대상만 모름', vis_causeHidden: '이유 숨김',
+    vis_causeHidden_short: '(비밀)',
+    f_turns_custom: '턴 수 직접 입력', turns_ph: '1~99',
+    cause_ph: '왜 일어났는지 (비워도 됨)', cause_roll: '🎲 원인', cause_wait: '원인을 짓는 중…',
+    apply: '적용', again: '다시', save_as_card: 'Spellbook 카드로 저장',
+    f_dispel_what: '없앨 것', dispel_family: '{fam} 계열 모두', nothing_dispel: '{name}에게 걸린 효과가 없어요.',
+    need_form: '형태 이름을 먼저 적어 주세요.', need_cond: '조건을 먼저 적어 주세요.', need_action: '어떤 행동으로 풀리는지 적어 주세요.',
+    need_target: '누구에게 걸지 골라 주세요.', full: '효과는 한 번에 {max}개까지예요. 먼저 하나를 풀어 주세요.',
+    clash: '{name}에게 이미 {title}이(가) 걸려 있어요. 먼저 풀어 주세요.',
+    ai_empty: 'AI가 빈 답을 보냈어요. 다시 시도하거나 설정에서 다른 연결 프로필을 골라 보세요.',
+    ai_fail: 'AI 요청이 실패했어요: {msg}', ai_no_profile_api: '이 실리태번 버전은 연결 프로필로 요청을 보낼 수 없어요.',
+    book_empty: '아직 카드가 없어요.', load: '불러오기', edit: '편집', new_card: '새 카드', editing_card: '카드 편집 중',
+    card_name: '카드 이름', card_name_ph: '예: 물의 저주', save: '저장', delete: '삭제', cancel: '취소',
+    card_saved: '카드를 저장했어요.', card_delete_q: '"{name}" 카드를 지울까요?',
+    timing_now: '즉시', timing_turns: '지연', timing_chance: '확률', timing_condition: '조건', kind_stacked: '중첩',
+    seed_water: '물의 저주', seed_water_cond: '💧 물에 닿음', seed_turtle: '거북이 장난', seed_pocket: '주머니 크기',
+    set_hint: '채팅에 마법 사건을 심어요. 누가·왜·언제 걸었는지까지, 매 턴 AI가 잊지 않게 붙잡아 둬요.',
+    set_open: 'Mage 열기', set_enabled: 'Mage 켜기', set_language: '언어', set_skin: '스킨',
+    skin_theme: '기본 (테마 따라가기)', skin_tome: '고서', skin_cursed: '저주서',
+    set_world: '이 세계의 마법', world_common: '흔함 (판타지)', world_rare: '드묾 (현대물)', world_none: '없음',
+    world_hint_common: '다들 덤덤하게 반응해요.', world_hint_rare: '놀라고 당황하고, 설명을 찾으려 해요.',
+    world_hint_none: '아무도 이해 못 하는 이상한 일로 그려요.',
+    set_trickster: '"장난꾼"(요정 등)을 건 쪽으로 쓰기 — 현대물 세계관과 안 맞을 수 있어요',
+    set_pool: '🎲 무작위 형태를 뽑을 범위', set_pool_hint: '아무것도 안 고르면 전체에서 뽑아요.',
+    set_ai: '🎲 원인·"채우기"에 쓸 AI', set_profile: '연결 프로필', set_profile_current: '(지금 쓰는 API)',
+    set_profile_missing: '⚠️ 프로필이 없어요 — 다시 골라 주세요', set_preset: '연결 프로필의 프리셋도 같이 보내기',
+    set_preset_hint: '기본은 꺼짐. RP 프리셋이 섞이면 AI가 캐릭터 말투로 답할 수 있어요.',
+    set_reasoning: '생각 정도', reasoning_default: '모델 기본값', reasoning_low: '낮음', reasoning_medium: '보통', reasoning_high: '높음',
+    set_context: '🎲 원인이 읽을 최근 메시지 수', set_reset_pos: '상태창 위치 초기화', pos_reset: '상태창을 제자리로 옮겼어요.',
+    set_backup: '백업', set_export: '내보내기', set_import: '가져오기', imported: '백업을 불러왔어요.', import_fail: 'Mage 백업 파일이 아니에요.',
+    import_q: 'Mage의 모든 데이터(걸린 효과, Spellbook, 설정)를 이 백업으로 바꿀까요?',
+    version: '버전 {v}',
+};
+
+const TABLES = { en: EN, ko: KO };
+let current = 'en';
+
+export function setLanguage(l) { current = TABLES[l] ? l : 'en'; }
+export function lang() { return current; }
+
+/** Text for a key. Values put into {slots} are not translated again. */
+export function t(key, vars) {
+    const raw = TABLES[current][key] ?? EN[key] ?? key;
+    if (!vars) return raw;
+    return raw.replace(/\{(\w+)\}/g, (m, k) => (vars[k] !== undefined ? String(vars[k]) : m));
+}
+
+/** Korean particle after a word: josa('고양이', '이/가') → '가'; josa('물', '으로/로') → '로'. */
+export function josa(word, pair) {
+    const [withF, without] = pair.split('/');
+    const ch = Array.from(String(word || '').trim()).pop() || '';
+    const code = ch.charCodeAt(0) - 0xac00;
+    if (code < 0 || code > 11171) return without; // not Hangul: pick the vowel form
+    const fin = code % 28;
+    if (!fin) return without;
+    if (pair === '으로/로' && fin === 8) return without; // ㄹ → 로
+    return withF;
+}
