@@ -103,7 +103,7 @@ export async function askForm(name, lang, signal) {
  * AI judging: did these conditions happen in the newest part of the story, and does it claim
  * these effects ended? Returns { C1: { yes, reason }, E1: ... }.
  */
-export async function askJudge({ conds, claims, lang }, signal) {
+export async function askJudge({ conds, claims, lang, casts = [], spells = '', people = [] }, signal) {
     const st = settings();
     let chat = [];
     try { chat = (ctx().chat || []).filter(m => m && !m.is_system); } catch { /* ignore */ }
@@ -121,6 +121,13 @@ export async function askJudge({ conds, claims, lang }, signal) {
     parts.push(`NEW:\n${recent.slice(from).map(line).join('\n')}`);
     if (conds.length) parts.push(`Conditions — did this happen in the NEW part?\n${conds.map((c, n) => `C${n + 1}: ${c}`).join('\n')}`);
     if (claims.length) parts.push(`Magic effects — does the NEW part say or show that this effect ended, broke, wore off or was removed?\n${claims.map((c, n) => `E${n + 1}: ${c}`).join('\n')}`);
+    if (casts.length) {
+        parts.push('Spells cast by characters — in the NEW part, does this character clearly use magic to cast one of these spells on someone (not only talk about it or plan it)?\n'
+            + `Spells: ${spells}\nPeople: ${people.join(', ')}\n`
+            + casts.map((c, n) => `S${n + 1}: ${c}`).join('\n')
+            + '\nFor these, answer exactly "<id>: YES - <spell name> - <target\'s name> - <short reason>" or "<id>: NO". '
+            + 'After Polymorph put the animal in brackets, e.g. "Polymorph (cat)"; after Glamour, what they now look like. Use the spell names above in English.');
+    }
     parts.push(`Write each reason in ${LANG_NAME[lang] || 'English'}, at most 15 words. Keep "YES"/"NO" in English.`);
     const profileId = st.judgeProfile === 'same' ? st.profileId : st.judgeProfile;
     const raw = await requestLLM([{ role: 'system', content: system }, { role: 'user', content: parts.join('\n\n') }],
@@ -131,11 +138,11 @@ export async function askJudge({ conds, claims, lang }, signal) {
 export function parseJudge(text) {
     const out = {};
     for (const ln of String(text || '').split('\n')) {
-        const m = /^[\s*\-#>]*\**\s*([CE]\d+)\s*\**\s*[:：.)]\s*\**\s*(YES|NO)\b\**\s*[-–—:,.]?\s*(.*)$/i.exec(ln);
+        const m = /^[\s*\-#>]*\**\s*([CES]\d+)\s*\**\s*[:：.)]\s*\**\s*(YES|NO)\b\**\s*[-–—:,.]?\s*(.*)$/i.exec(ln);
         if (!m) continue;
         const id = m[1].toUpperCase();
         if (out[id]) continue;
-        out[id] = { yes: m[2].toUpperCase() === 'YES', reason: m[3].trim().replace(/^["'“”]+|["'“”]+$/g, '').slice(0, 160) };
+        out[id] = { yes: m[2].toUpperCase() === 'YES', reason: m[3].trim().replace(/^["'“”]+|["'“”]+$/g, '').slice(0, 220) };
     }
     return out;
 }

@@ -151,6 +151,26 @@ const EN = {
     sug_claim_other: 'Not the set way, so it does not break.', sug_how: 'Ends: {r}', sug_source: 'Cast by: {s}',
     sug_strict: 'The AI is already told it wavers, then comes back.', sug_ok: 'Got it',
     sug_foot: 'Re-rolling or deleting this reply removes these suggestions.',
+    // character casters (2-B-2)
+    tab_casters: 'Casters', src_character: 'Character', f_source_char: 'Which character',
+    btn_caster_undo: '{name} undoes it', rel_caster: '{name} can undo it',
+    no_dispel_char: '{name} cast this, so you cannot dispel it. If {name} undoes it, AI judging tells you.',
+    c_hint: 'This chat only · in a group chat, each member has its own.', c_none: 'There is no character in this chat.',
+    c_judge_off: 'AI judging is off, so characters cannot cast (A and B both need it). Turn it on in ⚙.',
+    c_spells: 'Spells {name} can cast', c_no_dispel: 'No Dispel — a character can only undo its own spells.',
+    c_every_t: 'How often', c_every: '1× / {n} turns', c_ready: 'Can cast now', c_wait: 'Can cast in {n} turns',
+    c_dur: 'Lasts (turns)', c_release: 'Ends: when the turns run out · at once if {name} undoes it.',
+    c_how: 'How they cast', c_a: 'A. As the story goes', c_a_sub: 'AI judging notices "{name} cast it".', c_always: 'Always on',
+    c_b: 'B. Extension dice', c_b_sub: 'On a hit, the AI writing the reply is quietly told to cast it.', c_chance: 'Chance per turn (%)',
+    c_import: 'Copy from a chat', c_import_hint: 'Only chats with the same characters · replaces the settings here.',
+    c_import_none: 'No other chat has spells for these characters yet.', c_import_btn: 'Copy', c_imported: 'Copied.',
+    c_clear: 'Clear', c_clear_q: 'Clear the spells of {name} in this chat?', c_cleared: 'Cleared.',
+    dice_t: 'This turn: {name} casts {spell}',
+    sug_cast_t: '{name} cast {spell}', sug_cast_tag: 'Character spell',
+    sug_cast_body: 'On: {target} · {n} turns · ends: turns run out / {name} undoes it',
+    sug_cast_notlist: 'Not one of the spells of {name}. Casting it anyway still counts toward how often.',
+    sug_cast_wait: '{name} cast one recently ({n} turns to go). Cast it anyway?',
+    sug_apply_cast: 'Apply — cast it', sug_cast_anyway: 'Cast anyway', toast_char_cast: '{name} → {title}',
 };
 
 const KO = {
@@ -292,6 +312,26 @@ const KO = {
     sug_claim_other: '정해진 방법이 아니라서 안 풀려요.', sug_how: '풀리는 법: {r}', sug_source: '건 쪽: {s}',
     sug_strict: 'AI에게는 이미 "흔들리다 다시 돌아온다"는 줄이 가고 있어요.', sug_ok: '알겠어요',
     sug_foot: '이 답변을 다시 뽑거나 지우면 제안도 사라져요.',
+    // 캐릭터 시전자 (2-B-2)
+    tab_casters: '캐릭터', src_character: '캐릭터', f_source_char: '어느 캐릭터',
+    btn_caster_undo: '{name}{jg} 풀어 줌', rel_caster: '{name}{jg} 풀기',
+    no_dispel_char: '{name}{jg} 건 주문이라서 Dispel할 수 없어요. {name}{jg} 스스로 풀면 AI 판정이 알려 줘요.',
+    c_hint: '이 채팅에서만 적용돼요 · 그룹 채팅이면 멤버마다 따로', c_none: '이 채팅에는 캐릭터가 없어요.',
+    c_judge_off: 'AI 판정이 꺼져 있어서 캐릭터가 주문을 걸 수 없어요(A·B 모두 필요). ⚙에서 켜 주세요.',
+    c_spells: '{name}{jg} 쓸 수 있는 주문', c_no_dispel: 'Dispel은 없어요 — 캐릭터는 자기가 건 주문만 풀 수 있어요.',
+    c_every_t: '얼마나 자주', c_every: '{n}턴에 최대 1번', c_ready: '지금 쓸 수 있음', c_wait: '{n}턴 뒤 쓸 수 있음',
+    c_dur: '기본 지속 (턴)', c_release: '풀리는 법: 남은 턴 · {name}{jg} 스스로 풀면 바로',
+    c_how: '거는 방식', c_a: 'A. 이야기 흐름대로', c_a_sub: 'AI 판정이 "{name}{jg} 걸었다"를 알아챔', c_always: '항상 켜짐',
+    c_b: 'B. 확장 주사위', c_b_sub: '맞으면 이번 답변을 쓰는 AI에게 걸라고 몰래 알림', c_chance: '턴마다 확률 (%)',
+    c_import: '설정 가져오기', c_import_hint: '같은 캐릭터가 있는 채팅만 보여요 · 지금 설정을 덮어써요',
+    c_import_none: '이 캐릭터들의 주문 설정이 있는 다른 채팅이 아직 없어요.', c_import_btn: '가져오기', c_imported: '가져왔어요.',
+    c_clear: '비우기', c_clear_q: '이 채팅에서 {name}의 주문 설정을 비울까요?', c_cleared: '비웠어요.',
+    dice_t: '이번 턴: {name}{jg} {spell}{eul} 걸어요',
+    sug_cast_t: '{name}{jg} {spell}{eul} 걸었어요', sug_cast_tag: '캐릭터 주문',
+    sug_cast_body: '대상: {target} · {n}턴 · 풀리는 법: 남은 턴 / {name}{jg} 풀기',
+    sug_cast_notlist: '{name}의 목록에 없는 주문이에요 · 그래도 걸면 빈도는 똑같이 셈',
+    sug_cast_wait: '{name}{jg} 얼마 전에 썼어요({n}턴 남음) · 그래도 걸까요?',
+    sug_apply_cast: '적용 — 걸기', sug_cast_anyway: '그래도 걸기', toast_char_cast: '{name} → {title}',
 };
 
 const TABLES = { en: EN, ko: KO };

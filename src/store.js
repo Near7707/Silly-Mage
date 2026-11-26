@@ -31,7 +31,8 @@ const DEFAULTS = Object.freeze({
     judgeUnbind: true,      // also notice when the story claims a spell broke
     judgeProfile: 'same',   // 'same' = the profile of 🎲 cause, '' = current API, or a profile id
     judgeCount: 4,          // recent messages the check reads
-    // chatId -> { effects, actions, undoId, reloads: [{id,t,at}], loadout: string[]|null, loadAdds: [{spell,t,at}] }
+    // chatId -> { effects, actions, undoId, reloads: [{id,t,at}], loadout: string[]|null, loadAdds: [{spell,t,at}],
+    //            casters: { avatar: { spells, every, duration, dice, chance } }, casterLog }
     chats: {},
     // branch chats already copied from their parent: chatId -> parent chatId
     branchDone: {},
@@ -68,6 +69,8 @@ export function migrate(s) {
         if (!Array.isArray(st.loadAdds)) st.loadAdds = [];
         if (!Array.isArray(st.ledger)) st.ledger = [];
         if (!Array.isArray(st.checks)) st.checks = [];
+        if (!st.casters || typeof st.casters !== 'object' || Array.isArray(st.casters)) st.casters = {};
+        if (!Array.isArray(st.casterLog)) st.casterLog = [];
         if (st.loadout !== null && !Array.isArray(st.loadout)) st.loadout = null;
     }
     if (s.format < 2) {
@@ -95,6 +98,7 @@ export function fixRelease(e) {
     if (!e || typeof e !== 'object') return;
     if (!e.release || typeof e.release !== 'object') e.release = { kind: 'dispel', text: '' };
     const mine = e.source?.kind === 'me';
+    if (e.source?.kind === 'character' && e.release.kind === 'dispel') e.release.kind = 'time';
     if (!mine && e.release.kind === 'dispel') e.release.kind = 'time';
     if (mine && e.release.kind === 'time') e.release.kind = 'dispel';
 }
@@ -148,7 +152,7 @@ export function chatState(chatId = currentChatId(), create = false) {
     const s = settings();
     if (!s.chats[chatId]) {
         if (!create) return null;
-        s.chats[chatId] = { effects: [], actions: [], undoId: null, reloads: [], loadout: null, loadAdds: [], ledger: [], checks: [] };
+        s.chats[chatId] = { effects: [], actions: [], undoId: null, reloads: [], loadout: null, loadAdds: [], ledger: [], checks: [], casters: {}, casterLog: [] };
     }
     return s.chats[chatId];
 }

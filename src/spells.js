@@ -180,7 +180,7 @@ export const RANDOM_PLACES = {
     ko: ['오래된 분수대', '마른 우물', '도서관 안쪽', '풀이 무성한 정원', '다락방', '해 질 녘 갈림길'],
 };
 
-export const SOURCES = ['unknown', 'object', 'place', 'me', 'trickster'];
+export const SOURCES = ['unknown', 'object', 'place', 'me', 'character', 'trickster'];
 export const MOTIVES = ['', 'prank', 'punishment', 'mistake', 'pact', 'trial', 'accident'];
 export const TRIGGERS = ['now', 'turns', 'chance', 'condition'];
 export const RELEASES = ['dispel', 'truth', 'action'];

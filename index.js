@@ -3,8 +3,9 @@
 // to character cards, chat files or chat metadata; everything lives in extension settings.
 
 import { t, setLanguage } from './src/i18n.js';
-import { ctx, settings, uiLang, onChatRenamed, onChatDeleted } from './src/store.js';
-import { views, setSent, markDelivered, copyFromParent } from './src/engine.js';
+import { ctx, settings, uiLang, onChatRenamed, onChatDeleted, currentChatId } from './src/store.js';
+import { views, setSent, markDelivered, copyFromParent, chatView } from './src/engine.js';
+import { rollDice, setDice } from './src/casters.js';
 import { buildPrompt } from './src/describe.js';
 import { MAGE_GLYPH } from './src/icons.js';
 import { VERSION, prefsHtml, prefsClick, prefsChange, prefsFocus, setPrefsHooks } from './src/prefs.js';
@@ -32,11 +33,28 @@ function updatePrompt(genType = pendingGen, live = false) {
         const built = buildPrompt(views({ skipLast }), { withNotes });
         text = built.text;
         if (live) setSent(withNotes ? built.notes : []);
+        // B. The dice: a character may cast this turn (only for a new reply to my message, or a re-roll of it).
+        const dice = ['normal', 'swipe', 'regenerate'].includes(type) && s.judgeMode !== 'off' ? diceFor(skipLast) : null;
+        if (dice) text = (text ? `${text}\n` : `[Magic in this story. Do not mention this note.]\n`) + `This turn (once): ${dice.text}`;
+        if (live) setDice(dice ? { chatId: currentChatId(), name: dice.name, spell: dice.spell, variant: dice.variant,
+            label: t(dice.spell === 'luck' && dice.variant === 'bad' ? 'spell_jinx' : `spell_${dice.spell}`) } : null);
     }
     try {
         // 1 = in chat, depth 1 (close to the reply, so it is not forgotten), no world-info scan, system role.
         c.setExtensionPrompt(PROMPT_KEY, text, 1, 1, false, 0);
     } catch (e) { console.error('[Mage] prompt', e); }
+}
+
+let speaker = null; // group chats: the member about to reply (GROUP_MEMBER_DRAFTED)
+
+function diceFor(skipLast) {
+    const c = ctx();
+    let avatar = null;
+    try {
+        if (c.groupId) avatar = speaker;
+        else if (c.characterId !== undefined) avatar = c.characters?.[c.characterId]?.avatar || null;
+    } catch { /* ignore */ }
+    try { return rollDice(chatView(skipLast), avatar); } catch (e) { console.error('[Mage] dice', e); return null; }
 }
 
 // ---------- refreshing ----------
@@ -132,7 +150,10 @@ function registerEvents() {
     const ev = ctx().eventTypes || ctx().event_types;
     const on = (name, fn) => { if (name) eventSource.on(name, (...a) => { try { return fn(...a); } catch (e) { console.error('[Mage]', e); } }); };
 
-    on(ev.CHAT_CHANGED, () => { copyFromParent(); mountBar(); changedNow(); });
+    on(ev.CHAT_CHANGED, () => { speaker = null; setDice(null); copyFromParent(); mountBar(); changedNow(); });
+    on(ev.GROUP_MEMBER_DRAFTED, (chId) => {
+        try { speaker = ctx().characters?.[Number(chId)]?.avatar || null; } catch { speaker = null; }
+    });
     for (const name of [ev.MESSAGE_DELETED, ev.MESSAGE_SWIPED, ev.MESSAGE_EDITED, ev.MESSAGE_UPDATED,
         ev.USER_MESSAGE_RENDERED, ev.CHARACTER_MESSAGE_RENDERED, ev.MORE_MESSAGES_LOADED, ev.CHAT_LOADED, ev.MESSAGE_SENT]) {
         on(name, refreshSoon);

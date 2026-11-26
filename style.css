@@ -431,3 +431,47 @@
 .mage-row.mage-nodispel { display: block; }
 .mage-row.mage-nodispel dd { font-size: 12.5px; color: var(--mage-muted); }
 .mage-hint.mage-warn { color: var(--mage-danger); }
+
+/* ---------- character casters (2-B-2) ---------- */
+.mage-tabs .mage-tab { padding: 0 4px; font-size: 13px; } /* four tabs fit one row on a phone */
+.mage-chint { margin: 0 0 8px; }
+.mage-cwarn { color: var(--mage-danger); }
+.mage-cmembers { display: flex; gap: 6px; margin: 0 0 10px; overflow-x: auto; overscroll-behavior: contain; scrollbar-width: none; }
+.mage-cmembers::-webkit-scrollbar { display: none; }
+.mage-cmember {
+    flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px; height: 36px; max-width: 60%; padding: 0 10px 0 5px; cursor: pointer;
+    background: var(--mage-surface); color: var(--mage-text); border: 1px solid var(--mage-border); border-radius: 18px; font-size: 13px; white-space: nowrap;
+}
+.mage-cmember .mage-ini { width: 24px; height: 24px; font-size: 12px; }
+.mage-cmember.on { border-color: var(--mage-accent); background: var(--mage-surface2); font-weight: 700; }
+.mage-cmember.mage-cempty { border-style: dashed; color: var(--mage-muted); }
+.mage-cn { flex: 0 0 auto; font-variant-numeric: tabular-nums; color: var(--mage-muted); }
+.mage-csec { margin: 0 0 10px; padding: 10px; border-radius: 10px; background: var(--mage-surface); display: flex; flex-direction: column; gap: 8px; }
+.mage-csec .mage-lspell { height: 52px; background: var(--mage-bg); }
+.mage-csec .mage-lspell.on { background: var(--mage-surface2); }
+.mage-csec .mage-hint { margin: 0; }
+.mage-csec-t { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.mage-csec-t > b { flex: 1 1 auto; }
+.mage-crow { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.mage-cl { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; font-size: 13.5px; line-height: 1.35; }
+.mage-cl .mage-muted { font-size: 12px; }
+.mage-cval { flex: 0 0 auto; min-width: 92px; text-align: center; font-size: 13px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.mage-btn.mage-cstep { flex: 0 0 auto; width: 34px; height: 34px; padding: 0; font-size: 16px; font-weight: 700; }
+.mage-crow .mage-segs { flex: 0 0 auto; }
+.mage-crow .mage-seg { min-width: 44px; }
+.mage-ctag {
+    flex: 0 0 auto; display: inline-block; padding: 1px 7px; border-radius: 9px; white-space: nowrap;
+    border: 1px solid var(--mage-accent); color: var(--mage-accent); font-size: 11px; line-height: 1.5; vertical-align: 1px;
+}
+.mage-check.mage-cdice { margin: 0; align-items: flex-start; }
+.mage-check.mage-cdice input { margin-top: 2px; }
+.mage-csec .mage-field { margin: 0; }
+.mage-cimport { margin: 0 0 8px; padding: 10px; border-radius: 10px; background: var(--mage-surface); }
+.mage-cimport .mage-cl .mage-muted { white-space: normal; }
+.mage-cimport .mage-btn { flex: 0 0 auto; max-width: 40%; }
+.mage-dicepill {
+    flex: 0 0 auto; display: inline-flex; align-items: center; gap: 4px; height: 30px; max-width: 30vw; padding: 0 9px; border-radius: 15px;
+    border: 1px solid var(--mage-accent); color: var(--mage-accent); background: var(--mage-surface); font-size: 12.5px; font-weight: 700; white-space: nowrap;
+}
+.mage-sug-card.mage-sug-dim { border: 1px dashed var(--mage-border); }
+.mage-sug-card.mage-sug-dim .mage-sug-btns .mage-btn:first-child { border-color: var(--mage-fam); color: var(--mage-fam); }

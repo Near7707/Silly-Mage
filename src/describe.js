@@ -72,6 +72,7 @@ function sourceEn(src) {
         case 'place': return name ? `a place (${name})` : 'a place';
         case 'me': return `${targetName({ kind: 'user' })}`;
         case 'trickster': return name ? `a trickster (${name})` : 'a trickster spirit';
+        case 'character': return name || 'a character';
         default: return '';
     }
 }
@@ -121,6 +122,8 @@ export function ongoingLine(v) {
     else parts.push(`No time limit; ends only when ${releaseEn(e, who)}.`);
     if (e.duration > 0 && !['dispel', 'time'].includes(rk)) parts.push(`Ends early if ${releaseEn(e, who)}.`);
     if (SIMPLE[e.spell]?.breaker) parts.push(SIMPLE[e.spell].breaker.rule.en);
+    const caster = e.source?.kind === 'character' ? String(e.source.name || '').trim() : '';
+    if (caster) parts.push(`${caster} cast it and can undo it whenever they choose.`);
     // Someone else's magic: the user writing "it broke" does not end it (2-B will ask instead).
     if (e.source?.kind !== 'me' && settings().strictRelease) {
         parts.push('This magic only ends the set way. If anyone claims it is broken or tries to force it off, it holds: it may seem to waver for a moment, then it returns.');
@@ -173,7 +176,7 @@ export function justNotes(v, world) {
             if (v.endReason === 'dispel') {
                 const by = v.actions.find(a => a.type === 'dispel')?.by;
                 why = by ? `was just dispelled (${by})` : 'was just dispelled';
-            } else if (v.endReason === 'release') why = `just broke (${releaseEn(e, who)})`;
+            } else if (v.endReason === 'release') why = rel?.via === 'caster' ? `was just undone by ${e.source?.name || 'its caster'}` : `just broke (${releaseEn(e, who)})`;
             text = `${nameEn(e)} on ${who} ${why}. ${fillWho(def.end, who, e)}`;
         }
         notes.push({ text: `${text} Write it in this reply.`.replace('reply. Write it in this reply.', 'reply.'), kind: 'end', effectId: e.id });
@@ -183,7 +186,10 @@ export function justNotes(v, world) {
         if (v.endReason === 'dispel') {
             const by = v.actions.find(a => a.type === 'dispel')?.by;
             why = by ? `was just dispelled (${by})` : 'was just dispelled';
-        } else if (v.endReason === 'release') why = `just broke (${releaseEn(e, who)})`;
+        } else if (v.endReason === 'release') {
+            const rel = v.actions.find(a => a.type === 'judge' && a.what === 'release');
+            why = rel?.via === 'caster' ? `was just undone by ${e.source?.name || 'its caster'}` : `just broke (${releaseEn(e, who)})`;
+        }
         notes.push({ text: `${name} on ${who} ${why}. Write ${who} returning to normal in this reply.`, kind: 'end', effectId: e.id });
     }
     return notes;

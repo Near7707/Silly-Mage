@@ -157,7 +157,9 @@ export function views({ skipLast = false, chatId = currentChatId() } = {}) {
     const st = chatState(chatId);
     if (!st) return [];
     const view = chatView(skipLast);
-    return st.effects.map(e => evaluate(e, view, st.actions));
+    // A character's spell belongs to the reply it was noticed in: once that reply is gone, so is the spell.
+    return st.effects.filter(e => !e.strict || e.anchor?.key == null || view.index.has(e.anchor.key))
+        .map(e => evaluate(e, view, st.actions));
 }
 
 /** Effects shown on screen: not ended, or ended but the AI still has to hear about it. */
@@ -214,6 +216,17 @@ function addAction(a) {
     return a;
 }
 
+/** A character's cast as an action, so ↶ can take it back (casts sharing `batch` go back together). */
+export function castAction(effectIds, batch = null) {
+    let last = null;
+    for (const effectId of effectIds) {
+        const a = { type: 'cast', effectId, at: lastRef() };
+        if (batch) a.batch = batch;
+        last = addAction(a);
+    }
+    return last;
+}
+
 /** A condition button. `what` = 'stack' | 'release' | 'trigger'. */
 export function judge(effectId, what, via = '', { batch = null, auto = false } = {}) {
     const a = { type: 'judge', effectId, what, via, at: lastRef(), delivered: null };
@@ -252,8 +265,15 @@ export function undo() {
     const st = chatState();
     const a = undoable();
     if (!st || !a) return null;
-    // Things done together (a family Dispel, several auto judgments) go back together.
-    st.actions = st.actions.filter(x => x.id !== a.id && !(a.batch && x.batch === a.batch && x.type === a.type));
+    // Things done together (a family Dispel, several auto judgments and casts) go back together.
+    const gone = st.actions.filter(x => x.id === a.id || (a.batch && x.batch === a.batch));
+    st.actions = st.actions.filter(x => !gone.includes(x));
+    // Taking back a character's cast removes that spell (and anything done to it).
+    const casts = new Set(gone.filter(x => x.type === 'cast').map(x => x.effectId));
+    if (casts.size) {
+        st.effects = st.effects.filter(e => !casts.has(e.id));
+        st.actions = st.actions.filter(x => !casts.has(x.effectId));
+    }
     st.undoId = null;
     save();
     return a;
@@ -282,6 +302,13 @@ export function history(limit = 6) {
 /** Keep old, fully finished effects from piling up. */
 function prune(st) {
     const view = chatView(false);
+    // Character spells whose reply was re-rolled away: keep a few (swiping back brings them back).
+    const gone = st.effects.filter(e => e.strict && e.anchor?.key != null && !view.index.has(e.anchor.key));
+    if (gone.length > 8) {
+        const out = new Set(gone.sort((a, b) => a.created - b.created).slice(0, gone.length - 8).map(e => e.id));
+        st.effects = st.effects.filter(e => !out.has(e.id));
+        st.actions = st.actions.filter(a => !out.has(a.effectId));
+    }
     const done = st.effects.map(e => evaluate(e, view, st.actions)).filter(v => v.status === 'ended' && !v.needEnd);
     const extra = done.length - 12;
     if (extra <= 0) return;
@@ -291,6 +318,10 @@ function prune(st) {
     for (const e of st.effects) if (drop.has(e.id) && e.ruled) st.ledger.push({ spell: e.spell, t: e.created, at: e.anchor, cost: e.cost || 0 });
     for (const a of st.actions) if (drop.has(a.effectId) && a.type === 'dispel' && a.ruled) st.ledger.push({ spell: 'dispel', t: a.t, at: a.at, cost: a.cost || 0 });
     if (st.ledger.length > 60) st.ledger.splice(0, st.ledger.length - 60);
+    // A character's "how often" count also survives the clean-up.
+    st.casterLog ||= [];
+    for (const e of st.effects) if (drop.has(e.id) && e.source?.kind === 'character') st.casterLog.push({ avatar: e.source.avatar, t: e.created, at: e.anchor });
+    if (st.casterLog.length > 40) st.casterLog.splice(0, st.casterLog.length - 40);
     st.effects = st.effects.filter(e => !drop.has(e.id));
     st.actions = st.actions.filter(a => !drop.has(a.effectId));
 }
@@ -345,8 +376,9 @@ export function copyFromParent() {
     from.reloads = (from.reloads || []).filter(here);
     from.loadAdds = (from.loadAdds || []).filter(here);
     from.ledger = (from.ledger || []).filter(x => x?.at?.key == null || view.index.has(x.at.key));
+    from.casterLog = (from.casterLog || []).filter(x => x?.at?.key == null || view.index.has(x.at.key));
     s.branchDone[id] = parent;
-    if (from.effects.length) s.chats[id] = from;
+    if (from.effects.length || Object.keys(from.casters || {}).length) s.chats[id] = from;
     save();
     return true;
 }

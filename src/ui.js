@@ -1,14 +1,18 @@
 // Screens: the small status bar above the input box, the floating status window
-// (Status / Cast / Spellbook) and the panel in SillyTavern's extension settings.
+// (Status / Cast / Casters / Spellbook) and the panel in SillyTavern's extension settings.
 
 import { t, lang, josa } from './i18n.js';
-import { conditionsOf, suggestions, isChecking, closeSuggestion } from './judge.js';
+import { conditionsOf, suggestions, isChecking, closeSuggestion, storyShowsEnd, spellLabel } from './judge.js';
+import {
+    chatMembers, casterConf, setCaster, clearCaster, waitTurns, CASTER_SPELLS, CASTER_DURATIONS,
+    castByCharacter, importChoices, importFrom, getDice,
+} from './casters.js';
 import { ctx, settings, save, currentChatId, uid, fixRelease } from './store.js';
 import {
     SIMPLE, FAMILIES, SPELLS, SPELL_ORDER, FORMS, formById, STAGES, STAGE_MAX, SOURCES, MOTIVES, TRIGGERS, RELEASES,
     VISIBILITY, DURATIONS, MAX_EFFECTS, MOTIVE_SUGGEST, RANDOM_OBJECTS, RANDOM_PLACES,
 } from './spells.js';
-import { views, shown, liveCount, cast, judge, dispel, undo, undoable, history, removeEffect } from './engine.js';
+import { views, shown, liveCount, cast, judge, dispel, undo, undoable, history, removeEffect, lastRef } from './engine.js';
 import { targetName, initial, formText, stateText } from './describe.js';
 import { iconSvg, framedIcon, MAGE_GLYPH } from './icons.js';
 import { syncTheme, famColor, colorMode } from './theme.js';
@@ -38,6 +42,8 @@ const ui = {
     loadEdit: null,     // spells being picked in the loadout editor, or null
     moreOpen: null,     // card whose ⋯ menu is open
     sugOpen: false,     // AI suggestions box above the status bar
+    casterSel: null,    // Casters tab: the member being set up
+    casterImport: false, // Casters tab: "copy from another chat" list
 };
 
 let barEl = null;
@@ -48,6 +54,10 @@ let winEl = null;
 function mode() { return colorMode(settings().skin, ui.vars); }
 function famCol(family) { return famColor(FAMILIES[family]?.color || '#888888', mode()); }
 const spellName = (id) => t(`spell_${id}`);
+// Korean object particle after an English spell name, by how it is read (슬립을, 폴리모프를).
+const EUL = new Set(['titan', 'charm', 'sleep', 'luck']);
+const eulOf = (spell, variant) => (spell === 'luck' && variant === 'bad' ? '를' : EUL.has(spell) ? '을' : '를');
+const jg = (name) => josa(name, '이/가');
 const famName = (id) => t(`fam_${id}`);
 
 function formLabel(f, L = lang()) {
@@ -193,6 +203,7 @@ function onBarClick(e) {
     if (q('[data-mage-sug-close]')) { ui.sugOpen = false; return refresh(); }
     if ((el = q('[data-mage-sug-apply]'))) return sugApply(el.dataset.mageSugApply);
     if ((el = q('[data-mage-sug-dispel]'))) return sugDispel(el.dataset.mageSugDispel);
+    if ((el = q('[data-mage-sug-cast]'))) return sugCast(el.dataset.mageSugCast);
     if ((el = q('[data-mage-sug-done]'))) { closeSuggestion(el.dataset.mageSugDone); return changed(); }
     if (q('.mage-sug')) return; // a click inside the box (not on a button) does nothing
     const j = e.target.closest('[data-mage-judge]');
@@ -213,8 +224,9 @@ function renderBar(list) {
     const s = settings();
     barEl.className = `mage-bar mage-root mage-skin-${s.skin}`;
     const rs = s.enabled && currentChatId() && s.rules ? rulesState() : null;
-    if (!s.enabled || !currentChatId() || (!list.length && !rs)) { barEl.hidden = true; barEl.innerHTML = ''; ui.sugOpen = false; return; }
-    const sugs = suggestions();
+    const sugs = s.enabled && currentChatId() ? suggestions() : [];
+    const dice = getDice(currentChatId());
+    if (!s.enabled || !currentChatId() || (!list.length && !rs && !sugs.length && !isChecking() && !dice)) { barEl.hidden = true; barEl.innerHTML = ''; ui.sugOpen = false; return; }
     if (!sugs.length) ui.sugOpen = false;
     const sugFor = (v, b) => sugs.find(x => x.kind === 'cond' && x.effectId === v.e.id && x.what === b.what && (x.via || '') === (b.via || ''));
     const barSkin = s.skin === 'tome' ? 'theme' : s.skin; // the bar keeps the chat readable; old-book paper only in the window
@@ -235,7 +247,9 @@ function renderBar(list) {
             + who + `<span class="mage-ell">${esc(chipText(v))}</span></button>`;
     };
     // In a shared chip, each person's condition button carries a small picture, so it's clear who it judges.
-    const conds = (u) => u.map(v => condButtons(v).map(b => condBtnHtml(v, b, 'mage-cond', u.length > 1, sugFor(v, b))).join('')).join('');
+    // "Mira undoes it" stays in the window unless the AI thinks it happened (keeps the bar short).
+    const conds = (u) => u.map(v => condButtons(v).filter(b => b.via !== 'caster' || sugFor(v, b))
+        .map(b => condBtnHtml(v, b, 'mage-cond', u.length > 1, sugFor(v, b))).join('')).join('');
     // Each chip is followed by its own condition buttons, so the one to press sits next to it.
     const shownHtml = units.slice(0, 2).map(u => chip(u) + conds(u)).join('');
     const rest = units.slice(2).flat().length;
@@ -249,6 +263,10 @@ function renderBar(list) {
     }
     const blue = famColor(FAMILIES.ward.color, barMode);
     let judgeBits = '';
+    if (dice) {
+        const tip = t('dice_t', { name: dice.name, jg: jg(dice.name), spell: dice.label, eul: eulOf(dice.spell, dice.variant) });
+        judgeBits += `<span class="mage-dicepill" title="${esc(tip)}" aria-label="${esc(tip)}">🎲 <span class="mage-ell">${esc(dice.name)}</span></span>`;
+    }
     // Kept short so the bar still fits one line on a phone: a spinner, or ✦ and a count.
     if (isChecking()) judgeBits += `<span class="mage-checking" style="--mage-fam:${blue}" title="${esc(t('checking_t'))}" role="status" aria-label="${esc(t('checking'))}"><span class="mage-spin" aria-hidden="true"></span></span>`;
     if (sugs.length) judgeBits += `<button type="button" class="mage-sugpill${ui.sugOpen ? ' on' : ''}" data-mage-sugopen="1" style="--mage-fam:${blue}" aria-expanded="${ui.sugOpen}" title="${esc(t('sug_pill', { n: sugs.length }))}" aria-label="${esc(t('sug_pill', { n: sugs.length }))}">${SPARK}<span>${sugs.length}</span></button>`;
@@ -263,7 +281,26 @@ function renderBar(list) {
 
 const SPARK = '<svg class="mage-spark" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3l2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg>';
 
+function castSugCard(x) {
+    const sp = spellLabel(x);
+    const who = { kind: 'char', avatar: x.avatar, name: x.name };
+    const conf = casterConf(x.avatar);
+    const head = `<div class="mage-sug-tt">${ini(who)}<b class="mage-ell">${esc(t('sug_cast_t', { name: x.name, jg: jg(x.name), spell: sp, eul: eulOf(x.spell, x.variant) }))}</b>`
+        + `<span class="mage-sug-tag">${esc(t('sug_cast_tag'))}</span></div>`;
+    let body = `<div class="mage-sug-txt">${esc(t('sug_cast_body', { target: targetName(x.target), n: conf.duration, name: x.name, jg: jg(x.name) }))}`
+        + (x.detail ? ` · ${esc(x.detail)}` : '') + '</div>';
+    if (!x.fits) {
+        const listed = conf.spells.includes(x.spell);
+        body += `<div class="mage-sug-sub">${esc(listed ? t('sug_cast_wait', { name: x.name, jg: jg(x.name), n: x.wait }) : t('sug_cast_notlist', { name: x.name }))}</div>`;
+    }
+    const why = x.reason ? `<div class="mage-sug-why">${esc(t('sug_reason', { r: x.reason }))}</div>` : '';
+    const btns = `<button type="button" class="mage-btn mage-small${x.fits ? ' mage-primary' : ''}" data-mage-sug-cast="${esc(x.id)}"><span class="mage-ell">${esc(x.fits ? t('sug_apply_cast') : t('sug_cast_anyway'))}</span></button>`
+        + `<button type="button" class="mage-btn mage-small" data-mage-sug-done="${esc(x.id)}"><span class="mage-ell">${esc(t('sug_no'))}</span></button>`;
+    return `<div class="mage-sug-card${x.fits ? '' : ' mage-sug-dim'}">${head}${body}${why}<div class="mage-sug-btns">${btns}</div></div>`;
+}
+
 function sugCard(x) {
+    if (x.kind === 'cast') return castSugCard(x);
     const e = x.v.e;
     const name = targetName(e.target);
     const head = `<div class="mage-sug-tt">${ini(e.target)}<b class="mage-ell">${esc(effectTitle(e))} — ${esc(name)}</b>`
@@ -305,7 +342,21 @@ function sugApply(id) {
     const x = suggestions().find(s => s.id === id);
     if (!x) return changed();
     closeSuggestion(id);
+    // The story already shows the character undoing it, so no "it ended" note goes out again.
+    if (x.via === 'caster') storyShowsEnd(x.effectId, lastRef().key);
     doJudge(x.effectId, x.what, x.via || '');
+}
+
+function sugCast(id) {
+    const x = suggestions().find(s => s.id === id);
+    if (!x || x.kind !== 'cast') return changed();
+    const eid = castByCharacter(x);
+    closeSuggestion(id);
+    if (eid) {
+        const v = views().find(y => y.e.id === eid);
+        toast('success', t('toast_char_cast', { name: x.name, title: v ? effectTitle(v.e) : spellLabel(x) }));
+    }
+    changed();
 }
 
 function sugDispel(id) {
@@ -392,7 +443,7 @@ function renderWindow() {
     gear.title = t('settings');
     gear.setAttribute('aria-label', t('settings'));
     gear.classList.toggle('on', ui.view === 'settings');
-    winEl.querySelector('.mage-tabs').innerHTML = ['status', 'cast', 'book'].map(v =>
+    winEl.querySelector('.mage-tabs').innerHTML = ['status', 'cast', 'casters', 'book'].map(v =>
         `<button type="button" class="mage-tab${ui.view === v ? ' on' : ''}" data-mage-view="${v}"><span class="mage-ell">${esc(v === 'status' ? t('tab_status', { n: live, max: MAX_EFFECTS }) : t(`tab_${v}`))}</span></button>`).join('');
     const orn = winEl.querySelector('.mage-orn');
     orn.innerHTML = s.skin === 'tome' ? '❧ ✥ ☙' : s.skin === 'cursed' ? (ui.view === 'book' ? '<span class="mage-drop"></span><span class="mage-drop"></span><span class="mage-drop"></span>' : '') : '';
@@ -403,6 +454,7 @@ function renderWindow() {
     const top = body.scrollTop;
     if (ui.view === 'status') { body.innerHTML = statusHtml(list); foot.innerHTML = statusFoot(); }
     else if (ui.view === 'cast') { body.innerHTML = castHtml(); foot.innerHTML = castFoot(); }
+    else if (ui.view === 'casters') { body.innerHTML = castersHtml(); foot.innerHTML = castersFoot(); }
     else if (ui.view === 'settings') {
         body.innerHTML = `<div class="mage-editing">⚙ ${esc(t('settings'))}</div>${prefsHtml(true)}`;
         foot.innerHTML = `<button type="button" class="mage-btn" data-mage-gear><span class="mage-ell">← ${esc(t('back'))}</span></button>`;
@@ -439,6 +491,8 @@ function ago(ts) {
 }
 
 function actionLabel(a, e) {
+    if (a.type === 'cast') return `${e.source?.name || '?'} → ${effectTitle(e)}`;
+    if (a.via === 'caster') return `${t('btn_caster_undo', { name: e.source?.name || '?', jg: jg(e.source?.name || '?') })} → ${t('released_short')}`;
     if (a.type === 'dispel') return `${spellName('dispel')} → ${effectTitle(e)}`;
     if (a.what === 'stack') {
         const st = chatViewStage(e, a);
@@ -465,6 +519,7 @@ function sourceLabel(src) {
     if (!src || src.kind === 'unknown') return src?.name ? esc(src.name) : '';
     const k = t(`src_${src.kind}`);
     if (src.kind === 'me') return esc(`${k} (${targetName({ kind: 'user' })})`);
+    if (src.kind === 'character') return `${esc(src.name || '?')} <span class="mage-ctag">${esc(k)}</span>`;
     return esc(src.name ? `${k} · ${src.name}` : k);
 }
 
@@ -474,7 +529,8 @@ function releaseLabel(e) {
     const timed = Number(e.duration) > 0;
     if (br && r.kind === 'time' && !timed) return br.rule[lang()];
     const pre = br ? `${br.rule[lang()]} · ` : '';
-    return pre + releaseBase(r, isMine(e), timed);
+    const by = e.source?.kind === 'character' ? ` · ${t('rel_caster', { name: e.source.name || '?', jg: jg(e.source.name || '?') })}` : '';
+    return pre + releaseBase(r, isMine(e), timed) + by;
 }
 
 function releaseBase(r, mine = true, timed = true) {
@@ -532,7 +588,10 @@ function cardHtml(v, open) {
             if (e.visibility === 'targetUnaware') rows += row(t('r_vis'), esc(t('vis_targetUnaware')));
         }
         if (v.status === 'ended') rows += row(t('r_note'), esc(t('ending_note')));
-        if (v.status !== 'ended' && !isMine(e)) rows += `<div class="mage-row mage-nodispel"><dd>${esc(t('no_dispel_note'))}</dd></div>`;
+        if (v.status !== 'ended' && !isMine(e)) {
+            const by = e.source?.kind === 'character' ? String(e.source.name || '?') : '';
+            rows += `<div class="mage-row mage-nodispel"><dd>${esc(by ? t('no_dispel_char', { name: by, jg: jg(by) }) : t('no_dispel_note'))}</dd></div>`;
+        }
     }
     const acts = open ? cardActs(v) : '';
     return `<div class="mage-card mage-st-${v.status}${open ? ' open' : ''}" data-id="${esc(e.id)}" style="--mage-fam:${famCol(fam)}">`
@@ -677,8 +736,16 @@ function castHtml() {
     if (!currentChatId() && ui.editCard === null) return `<div class="mage-empty">${esc(t('no_chat'))}</div>`;
     if (ui.loadEdit && ui.editCard === null) return loadEditHtml();
     let h = '';
+    if (ui.editCard === null && d.source.kind === 'character' && !chatMembers().some(m => m.avatar === d.source.avatar)) {
+        const m = chatMembers()[0];
+        d.source = m ? { kind: 'character', name: m.name, avatar: m.avatar } : { kind: 'unknown', name: '' };
+        fitRelease(d);
+    }
+    // A character's spell needs no mana and no loadout: the whole spell list is open.
+    const charSrc = d.source.kind === 'character';
+    if (charSrc && d.spell === 'dispel') setSpell(d, 'polymorph');
     const rs = ui.editCard === null && rulesOn() ? rulesState() : null;
-    if (rs && !d.fromCard && !rs.loadout.includes(d.spell) && rs.loadout.length) setSpell(d, rs.loadout[0]);
+    if (rs && !charSrc && !d.fromCard && !rs.loadout.includes(d.spell) && rs.loadout.length) setSpell(d, rs.loadout[0]);
     if (ui.editCard !== null) {
         h += `<div class="mage-editing">${esc(ui.editCard ? t('editing_card') : t('new_card'))}</div>`;
         h += field(t('card_name'), `<input class="mage-input" data-f="title" maxlength="40" value="${esc(d.title)}" placeholder="${esc(t('card_name_ph'))}">`);
@@ -690,11 +757,11 @@ function castHtml() {
             + `<button type="button" class="mage-btn mage-small" data-mage-loadout><span class="mage-ell">${esc(t('load_change'))}</span></button></div>`;
     }
     if (ui.editCard === null) h += field(t('f_target'), sel('target', targetOptions(d), d.target));
-    if (rs) {
+    if (rs && !charSrc) {
         h += `<div class="mage-field"><span class="mage-flabel">${esc(t('f_spell'))}</span><div class="mage-lgrid">`
             + rs.loadout.map(id => spellTile(id, d, rs)).join('') + '</div></div>';
         if (!rs.loadout.includes(d.spell)) h += `<div class="mage-note">${esc(spellName(d.spell))} · ${esc(t('block_loadout'))}</div>`;
-    } else h += field(t('f_spell'), sel('spell', ui.editCard !== null ? spellOpts.filter(o => o[0] !== 'dispel') : spellOpts, d.spell));
+    } else h += field(t('f_spell'), sel('spell', ui.editCard !== null || charSrc ? spellOpts.filter(o => o[0] !== 'dispel') : spellOpts, d.spell));
     if (rs && d.spell !== 'dispel' && !isMine(d)) h += `<div class="mage-hint">${esc(t('free_note'))}</div>`;
     h += `<div class="mage-spell-desc">${esc(t(`desc_${d.spell}`))}</div>`;
 
@@ -789,8 +856,13 @@ function fitRelease(d) {
 function detailsHtml(d) {
     const s = settings();
     let h = '<div class="mage-details">';
-    const srcs = SOURCES.filter(k => k !== 'trickster' || s.allowTrickster || d.source.kind === 'trickster');
+    const members = chatMembers();
+    const srcs = SOURCES.filter(k => (k !== 'trickster' || s.allowTrickster || d.source.kind === 'trickster')
+        && (k !== 'character' || members.length || d.source.kind === 'character'));
     h += field(t('f_source'), sel('srcKind', srcs.map(k => [k, t(`src_${k}`)]), d.source.kind));
+    if (d.source.kind === 'character' && members.length) {
+        h += field(t('f_source_char'), sel('srcChar', members.map(m => [m.avatar, m.name]), d.source.avatar));
+    }
     if (['object', 'place', 'trickster'].includes(d.source.kind)) {
         h += field(t('f_source_name'), `<input class="mage-input" data-f="srcName" maxlength="60" value="${esc(d.source.name)}" placeholder="${esc(t('src_name_ph'))}">`);
     }
@@ -855,11 +927,114 @@ function castButton(off) {
     let block = null;
     if (d && !off && rulesOn()) {
         const mine = d.spell === 'dispel' || isMine(d);
-        block = blockOf(d.spell, d.spell === 'dispel' ? 0 : d.duration, mine);
+        block = d.source?.kind === 'character' && d.spell !== 'dispel' ? null : blockOf(d.spell, d.spell === 'dispel' ? 0 : d.duration, mine);
         if (block) label = blockText(block);
         else if (mine) label += ` ◆${costOf(d.spell, d.spell === 'dispel' ? 0 : d.duration)}`;
     }
     return `<button type="button" class="mage-btn mage-primary" data-mage-cast${off || block ? ' disabled' : ''}><span class="mage-ell">${esc(label)}</span></button>`;
+}
+
+// ---------- Casters (2-B-2): characters with spells of their own, per chat ----------
+
+function castersHtml() {
+    if (!currentChatId()) return `<div class="mage-empty">${esc(t('no_chat'))}</div>`;
+    if (ui.casterImport) return casterImportHtml();
+    const members = chatMembers();
+    if (!members.length) return `<div class="mage-empty">${esc(t('c_none'))}</div>`;
+    if (!members.some(m => m.avatar === ui.casterSel)) ui.casterSel = members[0].avatar;
+    const m = members.find(x => x.avatar === ui.casterSel);
+    const conf = casterConf(m.avatar);
+    let h = `<div class="mage-hint mage-chint">${esc(t('c_hint'))}</div>`;
+    if (settings().judgeMode === 'off') h += `<div class="mage-note mage-cwarn">${esc(t('c_judge_off'))}</div>`;
+    h += '<div class="mage-cmembers">' + members.map(x => {
+        const n = casterConf(x.avatar).spells.length;
+        return `<button type="button" class="mage-cmember${x.avatar === m.avatar ? ' on' : ''}${n ? '' : ' mage-cempty'}" data-mage-csel="${esc(x.avatar)}" aria-pressed="${x.avatar === m.avatar}">`
+            + `${ini(x)}<span class="mage-ell">${esc(x.name)}</span><span class="mage-cn">${n}</span></button>`;
+    }).join('') + '</div>';
+
+    h += `<div class="mage-csec"><div class="mage-csec-t"><b class="mage-ell">${esc(t('c_spells', { name: m.name, jg: jg(m.name) }))}</b>`
+        + `<span class="mage-muted">${conf.spells.length}/${CASTER_SPELLS.length}</span></div><div class="mage-lgrid">`
+        + CASTER_SPELLS.map(id => {
+            const on = conf.spells.includes(id);
+            return `<button type="button" class="mage-lspell${on ? ' on' : ''}" data-mage-cspell="${id}" aria-pressed="${on}" style="--mage-fam:${famCol(SPELLS[id].family)}">`
+                + iconSvg(SPELLS[id].icon, { size: 18 }) + `<span class="mage-ell">${on ? '✓ ' : ''}${esc(spellName(id))}</span></button>`;
+        }).join('') + `</div><div class="mage-hint">${esc(t('c_no_dispel'))}</div></div>`;
+
+    const wait = waitTurns(m.avatar);
+    h += `<div class="mage-csec"><div class="mage-crow"><span class="mage-cl"><b>${esc(t('c_every_t'))}</b>`
+        + `<span class="mage-muted mage-ell">${esc(wait ? t('c_wait', { n: wait }) : t('c_ready'))}</span></span>`
+        + `<button type="button" class="mage-btn mage-small mage-cstep" data-mage-cevery="-1" aria-label="−"${conf.every <= 1 ? ' disabled' : ''}>−</button>`
+        + `<span class="mage-cval">${esc(t('c_every', { n: conf.every }))}</span>`
+        + `<button type="button" class="mage-btn mage-small mage-cstep" data-mage-cevery="1" aria-label="+"${conf.every >= 50 ? ' disabled' : ''}>+</button></div>`
+        + `<div class="mage-crow"><span class="mage-cl"><b>${esc(t('c_dur'))}</b></span><div class="mage-segs">`
+        + CASTER_DURATIONS.map(n => `<button type="button" class="mage-seg${conf.duration === n ? ' on' : ''}" data-mage-cdur="${n}" aria-label="${esc(t('dur_n', { n }))}">${n}</button>`).join('')
+        + `</div></div><div class="mage-hint">${esc(t('c_release', { name: m.name, jg: jg(m.name) }))}</div></div>`;
+
+    h += `<div class="mage-csec"><b>${esc(t('c_how'))}</b>`
+        + `<div class="mage-crow"><span class="mage-cl">${esc(t('c_a'))}<span class="mage-muted">${esc(t('c_a_sub', { name: m.name, jg: jg(m.name) }))}</span></span>`
+        + `<span class="mage-ctag">${esc(t('c_always'))}</span></div>`
+        + `<label class="mage-check mage-cdice"><input type="checkbox" data-mage-cdice${conf.dice ? ' checked' : ''}>`
+        + `<span class="mage-cl">${esc(t('c_b'))}<span class="mage-muted">${esc(t('c_b_sub'))}</span></span></label>`;
+    if (conf.dice) {
+        h += field(t('c_chance'), `<input class="mage-input mage-num" type="number" inputmode="numeric" min="1" max="100" data-mage-cchance value="${esc(conf.chance)}">`);
+    }
+    return h + '</div>';
+}
+
+function casterImportHtml() {
+    const list = importChoices();
+    let h = `<div class="mage-editing">${esc(t('c_import'))}</div><div class="mage-hint mage-chint">${esc(t('c_import_hint'))}</div>`;
+    if (!list.length) return h + `<div class="mage-empty">${esc(t('c_import_none'))}</div>`;
+    for (const c of list) {
+        const sum = c.members.map(m => `${m.name}: ${m.conf.spells.map(spellName).join(', ')} · ${t('c_every', { n: m.conf.every })}${m.conf.dice ? ` · 🎲 ${m.conf.chance}%` : ''}`);
+        h += `<div class="mage-crow mage-cimport"><span class="mage-cl"><b class="mage-ell">${esc(c.chatId)}</b>`
+            + sum.map(x => `<span class="mage-muted">${esc(x)}</span>`).join('') + '</span>'
+            + `<button type="button" class="mage-btn mage-small mage-primary" data-mage-cimport="${esc(c.chatId)}"><span class="mage-ell">${esc(t('c_import_btn'))}</span></button></div>`;
+    }
+    return h;
+}
+
+function castersFoot() {
+    if (ui.casterImport) return `<button type="button" class="mage-btn" data-mage-cimport-back><span class="mage-ell">← ${esc(t('back'))}</span></button>`;
+    const off = !currentChatId() || !chatMembers().length;
+    return `<button type="button" class="mage-btn" data-mage-cimport-open${off ? ' disabled' : ''}><span class="mage-ell">${esc(t('c_import'))}</span></button>`
+        + `<button type="button" class="mage-btn mage-danger-btn" data-mage-cclear${off ? ' disabled' : ''}><span class="mage-ell">${esc(t('c_clear'))}</span></button>`;
+}
+
+function casterClick(q) {
+    let el;
+    const av = ui.casterSel;
+    if ((el = q('[data-mage-csel]'))) { ui.casterSel = el.dataset.mageCsel; rerender(); return true; }
+    if ((el = q('[data-mage-cspell]'))) {
+        const id = el.dataset.mageCspell;
+        const cur = casterConf(av).spells;
+        setCaster(av, { spells: cur.includes(id) ? cur.filter(x => x !== id) : [...cur, id] });
+        changed();
+        return true;
+    }
+    if ((el = q('[data-mage-cevery]'))) { setCaster(av, { every: casterConf(av).every + Number(el.dataset.mageCevery) }); changed(); return true; }
+    if ((el = q('[data-mage-cdur]'))) { setCaster(av, { duration: Number(el.dataset.mageCdur) }); changed(); return true; }
+    if (q('[data-mage-cimport-open]')) { ui.casterImport = true; renderWindow(); return true; }
+    if (q('[data-mage-cimport-back]')) { ui.casterImport = false; renderWindow(); return true; }
+    if ((el = q('[data-mage-cimport]'))) {
+        const n = importFrom(el.dataset.mageCimport);
+        ui.casterImport = false;
+        toast(n ? 'success' : 'info', n ? t('c_imported') : t('c_import_none'));
+        changed();
+        return true;
+    }
+    if (q('[data-mage-cclear]')) {
+        const m = chatMembers().find(x => x.avatar === av);
+        if (!m) return true;
+        confirmBox(t('c_clear_q', { name: m.name })).then(ok => {
+            if (!ok) return;
+            clearCaster(av);
+            toast('info', t('c_cleared'));
+            changed();
+        });
+        return true;
+    }
+    return false;
 }
 
 // ---------- Spellbook ----------
@@ -1011,7 +1186,7 @@ function buildSpec(d) {
             : { kind: d.method === 'curse' ? 'condition' : d.trigger.kind, turns: Math.max(1, Number(d.trigger.turns) || 2),
                 chance: Math.min(100, Math.max(1, Number(d.trigger.chance) || 25)), text: String(d.trigger.text || '').trim() },
         release: { kind: d.release.kind, text: String(d.release.text || '').trim() },
-        source: { kind: d.source.kind, name: String(d.source.name || '').trim() },
+        source: { kind: d.source.kind, name: String(d.source.name || '').trim(), ...(d.source.kind === 'character' ? { avatar: d.source.avatar } : {}) },
         motive: d.motive || '',
         cause: String(d.cause || '').trim(),
         visibility: d.visibility || 'all',
@@ -1081,7 +1256,7 @@ function doCast() {
             && (v.e.spell === d.spell || (size.has(v.e.spell) && size.has(d.spell))));
         if (clash) return toast('warning', t('clash', { name: targetName(tg), title: effectTitle(clash.e) }));
     }
-    const rule = ruleFor(d.spell, d.duration, isMine(d));
+    const rule = d.source.kind === 'character' ? null : ruleFor(d.spell, d.duration, isMine(d));
     if (rule === false) return;
     const spec = buildSpec(d);
     if (['object', 'place'].includes(spec.source.kind) && !spec.source.name) spec.source.name = randomName(spec.source.kind);
@@ -1261,12 +1436,14 @@ function onWinClick(e) {
         if (el.closest('.mage-head')) return;
         ui.view = el.dataset.mageView;
         ui.loadEdit = null;
+        ui.casterImport = false;
         if (ui.view !== 'cast') ui.editCard = null;
         if (ui.view === 'cast' && (!ui.draft || ui.editCard !== null)) { ui.editCard = null; ui.draft = newDraft(); }
         if (settings().winCollapsed) { settings().winCollapsed = false; save(); }
         renderWindow();
         return place();
     }
+    if (ui.view === 'casters' && casterClick(q)) return;
     if ((el = q('[data-mage-toggle]'))) {
         const id = el.dataset.mageToggle;
         if (ui.opened.has(id)) ui.opened.delete(id); else ui.opened.add(id);
@@ -1316,6 +1493,13 @@ function onWinClick(e) {
 
 function onWinChange(e) {
     if (ui.view === 'settings') { prefsChange(e); return; }
+    if (ui.view === 'casters') {
+        const av = ui.casterSel;
+        // A focused box keeps the window from redrawing on refresh, so redraw here.
+        if (e.target.matches('[data-mage-cdice]')) { setCaster(av, { dice: e.target.checked }); changed(); return rerender(); }
+        if (e.target.matches('[data-mage-cchance]')) { setCaster(av, { chance: e.target.value }); changed(); return rerender(); }
+        return;
+    }
     const f = e.target.dataset?.f;
     const d = ui.draft;
     if (!f || !d) return;
@@ -1326,7 +1510,21 @@ function onWinChange(e) {
         case 'formSel': setForm(v); break;
         case 'dispelWhat': d.dispelWhat = v; return;
         case 'variant': d.variant = v; break;
-        case 'srcKind': d.source.kind = v; fitRelease(d); break;
+        case 'srcKind': {
+            const was = d.source.kind;
+            d.source.kind = v;
+            if (v === 'character') {
+                const m = chatMembers().find(x => x.avatar === d.source.avatar) || chatMembers()[0];
+                if (m) { d.source.avatar = m.avatar; d.source.name = m.name; }
+            } else if (was === 'character') { delete d.source.avatar; d.source.name = ''; }
+            fitRelease(d);
+            break;
+        }
+        case 'srcChar': {
+            const m = chatMembers().find(x => x.avatar === v);
+            if (m) { d.source.avatar = m.avatar; d.source.name = m.name; }
+            break;
+        }
         case 'motive': d.motive = v; applyMotive(d); break;
         case 'method':
             d.method = v;
@@ -1399,13 +1597,15 @@ export function refresh() {
         ui.loadEdit = null;
         ui.moreOpen = null;
         ui.sugOpen = false;
+        ui.casterImport = false;
+        ui.casterSel = null;
         if (ui.editCard === null) ui.draft = null;
     }
     ui.lastStatus = new Map(all.map(v => [v.e.id, v.status]));
     renderBar(shown(all));
     if (ui.open) {
         if (ui.view === 'cast' && !ui.draft) ui.draft = newDraft();
-        if ((ui.view === 'cast' || ui.view === 'settings') && winEl?.contains(document.activeElement) && /^(INPUT|TEXTAREA)$/.test(document.activeElement.tagName)) {
+        if (['cast', 'settings', 'casters'].includes(ui.view) && winEl?.contains(document.activeElement) && /^(INPUT|TEXTAREA)$/.test(document.activeElement.tagName)) {
             renderHeadOnly();
         } else rerender();
     }

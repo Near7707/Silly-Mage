@@ -75,6 +75,19 @@ It also notices when the story *says* a spell broke. For a spell you cast, it of
 
 Suggestions belong to the reply they were made for: re-roll or delete that reply and they are gone.
 
+### Characters who cast spells
+
+In the **Casters** tab, give each character of the chat spells of their own (each member of a group chat has its own list). These settings belong to this chat only; **Copy from a chat** takes them from another chat with the same character.
+
+- **Spells**: any spell except Dispel. **How often**: at most once every N turns (10 by default). **Lasts**: 3, 5 or 10 turns (5 by default).
+- **A. As the story goes** (always on): when the story shows the character casting, AI judging suggests it (or casts it in Auto mode). A spell that is not on the list, or one cast too soon, always asks first.
+- **B. Extension dice** (optional): on a hit, the AI writing the reply is quietly told the character casts a spell this turn. The check afterwards confirms it really happened.
+- A character's spell works like magic you did not cast: no mana, no loadout, no Dispel. It ends when its turns run out, or when the character undoes it (AI judging notices that too).
+- It belongs to the reply it was cast in: re-roll or delete that reply and the spell is gone. **↶** also takes it back.
+- In **More**, you can also pick a character as the one who cast a spell yourself.
+
+Both need AI judging to be on.
+
 ### Settings
 
 - **Look**: Default (follows your theme), Old tome, or Cursed book. Every look has the same buttons in the same places.
@@ -98,7 +111,8 @@ https://github.com/Near7707/Silly-Mage
 
 - The AI can still sometimes ignore or over-explain an effect. The note is kept short and clear to make this less likely.
 - AI judging can be wrong, which is why Suggest asks you first. Each check is one extra small request.
-- Secret conditions, characters casting spells, and the other spell families come in later stages.
+- Secret conditions and the other spell families come in later stages.
+- In group chats, the dice roll for the member about to reply; this depends on SillyTavern telling which member it is.
 
 ## Trying it without SillyTavern
 

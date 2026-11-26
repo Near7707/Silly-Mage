@@ -6,12 +6,13 @@
 // reply is re-rolled or deleted, its suggestions are gone (and an applied judgment no longer
 // counts, because judge() binds it to that reply).
 
-import { t, lang } from './i18n.js';
+import { t, lang, josa } from './i18n.js';
 import { settings, save, chatState, currentChatId, uid } from './store.js';
 import { SIMPLE, STAGE_MAX } from './spells.js';
 import { views, chatView, judge } from './engine.js';
 import { targetName, nameEn, formText, stateText } from './describe.js';
 import { askJudge } from './ai.js';
+import { activeCasters, waitTurns, readSpell, targetFromName, castBlock, castByCharacter, spellListEn, chatMembers } from './casters.js';
 
 const KEEP_CHECKS = 8;
 
@@ -44,6 +45,11 @@ export function conditionsOf(v) {
             out.push({ what: 'release', label: t('btn_truth'), en: e.release.text ? `${who} tells the truth about ${e.release.text}` : `${who} tells the truth (admits something they hid or lied about)` });
         }
         if (e.release?.kind === 'action') out.push({ what: 'release', label: e.release.text || t('rel_action'), en: String(e.release.text || 'the set act is done') });
+        // A character's spell: the character can undo it.
+        if (e.source?.kind === 'character') {
+            const by = String(e.source.name || '?');
+            out.push({ what: 'release', via: 'caster', label: t('btn_caster_undo', { name: by, jg: josa(by, '이/가') }), en: `${by} undoes (lifts) their own ${nameEn(e)} spell on ${who}` });
+        }
     }
     return out;
 }
@@ -69,13 +75,16 @@ function lastReply(view = chatView(false)) {
 function candidates(list, s = settings()) {
     const conds = [];
     const claims = [];
+    const casts = [];
     if (s.judgeMode !== 'off') {
         for (const v of list) for (const c of conditionsOf(v)) conds.push({ effectId: v.e.id, what: c.what, via: c.via || '', en: c.en });
+        // Characters with spells of their own: did they cast one? (2-B-2)
+        for (const m of activeCasters()) casts.push({ avatar: m.avatar, name: m.name });
     }
     if (s.judgeUnbind) {
         for (const v of list) if (v.status === 'active') claims.push({ effectId: v.e.id, en: effectEn(v) });
     }
-    return { conds, claims };
+    return { conds, claims, casts };
 }
 
 export function isChecking(chatId = currentChatId()) { return !!busy && busy.chatId === chatId; }
@@ -92,15 +101,17 @@ export async function maybeCheck() {
     const tag = `${chatId}|${last.key}`;
     if (tried.has(tag) || chatState(chatId)?.checks?.some(c => c.key === last.key)) return;
     const list = views();
-    const { conds, claims } = candidates(list, s);
-    if (!conds.length && !claims.length) return;
+    const { conds, claims, casts } = candidates(list, s);
+    if (!conds.length && !claims.length && !casts.length) return;
     tried.add(tag);
     busy = { chatId, key: last.key, ctl: new AbortController() };
     onChange();
     let answers = null;
     try {
+        const people = [`${targetName({ kind: 'user' })} (the user)`, ...chatMembers().map(m => m.name)];
         answers = await askJudge({
             conds: conds.map(c => c.en), claims: claims.map(c => c.en), lang: lang(),
+            casts: casts.map(c => c.name), spells: casts.length ? spellListEn() : '', people,
         }, busy.ctl.signal);
     } catch (err) {
         if (err?.name !== 'AbortError') {
@@ -110,13 +121,13 @@ export async function maybeCheck() {
     } finally {
         busy = null;
     }
-    if (answers) store(chatId, last.key, conds, claims, answers);
+    if (answers) store(chatId, last.key, conds, claims, casts, answers);
     onChange();
 }
 
 export function cancelCheck() { busy?.ctl.abort(); }
 
-function store(chatId, key, conds, claims, answers) {
+function store(chatId, key, conds, claims, casts, answers) {
     const s = settings();
     const st = chatState(chatId, true);
     if (!st) return;
@@ -134,6 +145,16 @@ function store(chatId, key, conds, claims, answers) {
         if (!a?.yes || released.has(c.effectId)) return;
         items.push({ id: uid('j'), kind: 'claim', effectId: c.effectId, reason: a.reason, state: 'open' });
     });
+    casts.forEach((c, n) => {
+        const a = answers[`S${n + 1}`];
+        if (!a?.yes) return;
+        const [spellPart, targetPart, ...why] = String(a.reason || '').split(/\s+[-–—]\s+/);
+        const sp = readSpell(spellPart);
+        if (!sp) return;
+        const target = targetFromName(targetPart);
+        items.push({ id: uid('j'), kind: 'cast', avatar: c.avatar, name: c.name, spell: sp.spell, variant: sp.variant,
+            detail: sp.detail, target, reason: why.join(' - ').trim(), state: 'open' });
+    });
     st.checks.push({ key, t: Date.now(), items });
     if (st.checks.length > KEEP_CHECKS) st.checks.splice(0, st.checks.length - KEEP_CHECKS);
     // Auto mode: conditions are judged right away (one Undo takes them all back). Claims always ask.
@@ -143,22 +164,56 @@ function store(chatId, key, conds, claims, answers) {
         for (const it of items) {
             if (it.kind !== 'cond' || !valid(it)) continue;
             judge(it.effectId, it.what, it.via, { batch, auto: true });
+            if (it.via === 'caster') storyShowsEnd(it.effectId, key);
             it.state = 'done';
             done.push(it);
+        }
+        // A character's cast goes in on its own only when it is one of its spells and it may cast now.
+        for (const it of items) {
+            if (it.kind !== 'cast' || !valid(it) || !castFits(it)) continue;
+            if (castByCharacter({ ...it, batch })) { it.state = 'done'; done.push(it); }
         }
         if (done.length) toast('info', done.length === 1 ? t('judge_auto_one', { what: labelOf(done[0]) }) : t('judge_auto_n', { n: done.length }));
     }
     save();
 }
 
+/** The story already showed the character undoing it: no "just ended" note goes out for it. */
+export function storyShowsEnd(effectId, key) {
+    const e = chatState()?.effects.find(x => x.id === effectId);
+    if (!e || !key) return;
+    e.deliveries ||= { cast: null, end: null };
+    e.deliveries.end = key;
+    save();
+}
+
+/** One of the character's own spells, and the character may cast again now. */
+export function castFits(it) {
+    const m = activeCasters().find(x => x.avatar === it.avatar);
+    return !!m && m.conf.spells.includes(it.spell) && castWait(it) === 0;
+}
+
+/** Turns the character still has to wait, counted before the reply it cast in. */
+export function castWait(it) {
+    const view = chatView(false);
+    const last = lastReply(view);
+    return waitTurns(it.avatar, view, last ? last.i - 1 : view.length - 1);
+}
+
 function labelOf(it) {
+    if (it.kind === 'cast') return `${it.name} · ${spellLabel(it)}`;
     const v = views().find(x => x.e.id === it.effectId);
     const c = conditionsOf(v).find(x => x.what === it.what && (x.via || '') === (it.via || ''));
     return `${v ? targetName(v.e.target) : '?'} · ${c?.label || t('cond')}`;
 }
 
 /** Is a stored suggestion still something that can be done? */
+export function spellLabel(it) {
+    return t(it.spell === 'luck' && it.variant === 'bad' ? 'spell_jinx' : `spell_${it.spell}`);
+}
+
 function valid(it, list = views()) {
+    if (it.kind === 'cast') return chatMembers().some(m => m.avatar === it.avatar) && !castBlock(it.spell, it.target, list);
     const v = list.find(x => x.e.id === it.effectId);
     if (!v) return false;
     if (it.kind === 'claim') return v.status === 'active';
@@ -174,8 +229,9 @@ export function suggestions(list = views()) {
     const check = last && st.checks.find(c => c.key === last.key);
     if (!check) return [];
     return check.items.filter(it => it.state === 'open' && valid(it, list)
-        && (it.kind === 'cond' ? s.judgeMode !== 'off' : s.judgeUnbind))
+        && (it.kind === 'claim' ? s.judgeUnbind : s.judgeMode !== 'off'))
         .map(it => {
+            if (it.kind === 'cast') return { ...it, fits: castFits(it), wait: castWait(it) };
             const v = list.find(x => x.e.id === it.effectId);
             const c = it.kind === 'cond' ? conditionsOf(v).find(x => x.what === it.what && (x.via || '') === (it.via || '')) : null;
             return { ...it, v, label: c?.label || '' };
