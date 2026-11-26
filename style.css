@@ -84,6 +84,15 @@
     background: var(--mage-surface2); border: 1px solid var(--mage-border); border-radius: 8px; font-size: 16px; font-weight: 700;
 }
 
+/* magic rules: mana chip and Reload (blue, readable on every skin) */
+.mage-mana {
+    flex: 0 0 auto; display: inline-flex; align-items: center; height: 30px; padding: 0 9px; border-radius: 15px;
+    border: 1px solid var(--mage-fam); color: var(--mage-fam); background: var(--mage-surface);
+    font-size: 13px; font-weight: 700; white-space: nowrap; font-variant-numeric: tabular-nums;
+}
+.mage-reload { color: var(--mage-fam); border-color: var(--mage-fam); }
+.mage-reload.mage-off { opacity: .4; border-style: dashed; }
+
 /* ---------- floating window ---------- */
 .mage-win {
     position: fixed; left: 0; top: 0; z-index: 9000;
@@ -348,3 +357,25 @@
 .mage-prefs-win .mage-pchip { min-height: 32px; font-size: 14px; }
 .mage-prefs-win .mage-psub { font-size: 13px; }
 .mage-hbtn.on { border-color: var(--mage-accent); color: var(--mage-accent); }
+
+/* ---------- magic rules: loadout grid, card ⋯ menu ---------- */
+.mage-loadbar { display: flex; align-items: center; gap: 6px; margin: 0 0 8px; padding: 6px 8px; border-radius: 8px; background: var(--mage-surface); font-size: 13px; }
+.mage-loadbar > .mage-ell { flex: 1 1 auto; min-width: 0; }
+.mage-loadbar .mage-btn { flex: 0 0 auto; max-width: 46%; }
+.mage-lgrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin: 2px 0 4px; }
+.mage-lspell {
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-width: 0; height: 64px; padding: 4px;
+    background: var(--mage-surface); color: var(--mage-text); border: 1px solid var(--mage-border); border-radius: 8px; cursor: pointer;
+    font-size: 13px; white-space: nowrap; touch-action: manipulation; -webkit-touch-callout: none; user-select: none;
+}
+.mage-lspell .mage-ico { color: var(--mage-fam); }
+.mage-lspell > .mage-ell { max-width: 100%; }
+.mage-lspell.on { border: 2px solid var(--mage-fam); background: var(--mage-surface2); font-weight: 700; }
+.mage-lspell.mage-resting { border-style: dashed; opacity: .6; }
+.mage-lcost { font-size: 11.5px; color: var(--mage-muted); font-variant-numeric: tabular-nums; }
+.mage-acts .mage-btn.mage-dots { flex: 0 0 auto; width: 40px; padding: 0; margin-left: auto; font-size: 18px; }
+.mage-forcebox { flex: 1 1 100%; display: flex; justify-content: flex-end; }
+.mage-forcebox .mage-btn { flex: 0 1 auto; }
+.mage-row.mage-nodispel { display: block; }
+.mage-row.mage-nodispel dd { font-size: 12.5px; color: var(--mage-muted); }
+.mage-hint.mage-warn { color: var(--mage-danger); }

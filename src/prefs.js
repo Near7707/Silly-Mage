@@ -7,7 +7,7 @@ import { FORMS } from './spells.js';
 import { getProfiles } from './ai.js';
 import { resetPos } from './win.js';
 
-export const VERSION = '0.2.1';
+export const VERSION = '0.3.0';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const toast = (kind, msg) => { try { globalThis.toastr?.[kind]?.(msg, 'Mage'); } catch { /* ignore */ } };
@@ -42,6 +42,7 @@ export function prefsHtml(win) {
     const check = (key, on, label) => `<label class="checkbox_label mage-pcheck"><input type="checkbox" data-mage-p="${key}"${on ? ' checked' : ''}><span>${esc(label)}</span></label>`;
     const hint = (text) => `<div class="mage-phint">${esc(text)}</div>`;
     const sub = (text) => `<div class="mage-psub">${esc(text)}</div>`;
+    const num = (key, v, min, max) => `<input class="${win ? 'mage-input mage-num' : 'text_pole mage-pnum'}" type="number" inputmode="numeric" min="${min}" max="${max}" data-mage-p="${key}" value="${esc(v)}">`;
     const pool = [...FORMS.map(f => [`b:${f.id}`, f.name[L] || f.name.en]), ...s.customForms.map(c => [`c:${c.id}`, c.name])]
         .map(([id, name]) => `<label class="mage-pchip"><input type="checkbox" data-mage-pool="${esc(id)}"${s.randomPool.includes(id) ? ' checked' : ''}><span>${esc(name)}</span></label>`).join('');
     return `<div class="mage-prefs${win ? ' mage-prefs-win' : ''}">`
@@ -51,6 +52,11 @@ export function prefsHtml(win) {
         + field(t('set_world'), sel('world', ['common', 'rare', 'none'].map(k => [k, t(`world_${k}`)]), s.world))
         + hint(t(`world_hint_${s.world}`))
         + check('trickster', s.allowTrickster, t('set_trickster'))
+        + sub(t('set_rules_sub'))
+        + check('rules', s.rules, t('set_rules')) + hint(t('set_rules_hint'))
+        + field(t('set_max_mana'), num('maxMana', s.maxMana, 1, 30))
+        + field(t('set_loadout_size'), num('loadoutSize', s.loadoutSize, 1, 13))
+        + check('strict', s.strictRelease, t('set_strict')) + hint(t('set_strict_hint'))
         + sub(t('set_pool')) + `<div class="mage-pool">${pool}</div>` + hint(t('set_pool_hint'))
         + sub(t('set_ai'))
         + field(t('set_profile'), sel('profile', [], '').replace('</select>', `${profileOptions()}</select>`))
@@ -108,6 +114,10 @@ export function prefsChange(e) {
         case 'skin': s.skin = el.value; save(); hooks.redrawAll(); break;
         case 'world': s.world = el.value; save(); hooks.redrawAll(); break;
         case 'trickster': s.allowTrickster = el.checked; save(); hooks.redrawAll(); break;
+        case 'rules': s.rules = el.checked; save(); hooks.redrawAll(); break;
+        case 'strict': s.strictRelease = el.checked; save(); hooks.redrawAll(); break;
+        case 'maxMana': s.maxMana = Math.min(30, Math.max(1, Math.round(Number(el.value) || 10))); el.value = s.maxMana; save(); hooks.redrawAll(); break;
+        case 'loadoutSize': s.loadoutSize = Math.min(13, Math.max(1, Math.round(Number(el.value) || 6))); el.value = s.loadoutSize; save(); hooks.redrawAll(); break;
         case 'profile': s.profileId = el.value; save(); break;
         case 'preset': s.sendPreset = el.checked; save(); break;
         case 'reasoning': s.reasoning = el.value; save(); break;

@@ -80,6 +80,7 @@ function releaseEn(e, who) {
     const r = e.release || { kind: 'dispel' };
     if (r.kind === 'truth') return r.text ? `${who} tells the truth about ${r.text}` : `${who} tells the truth`;
     if (r.kind === 'action') return String(r.text || 'a certain act is done');
+    if (r.kind === 'time') return 'its time runs out';
     return 'it is dispelled';
 }
 
@@ -114,10 +115,16 @@ export function ongoingLine(v) {
     }
     if (s.can) parts.push(`Can: ${s.can}.`);
     if (s.cannot) parts.push(`Cannot: ${s.cannot}.`);
+    const rk = e.release?.kind || 'dispel';
     if (e.duration > 0) parts.push(`${v.left} turn${v.left === 1 ? '' : 's'} left.`);
+    else if (rk === 'time') parts.push('No time limit.');
     else parts.push(`No time limit; ends only when ${releaseEn(e, who)}.`);
-    if (e.duration > 0 && e.release?.kind && e.release.kind !== 'dispel') parts.push(`Ends early if ${releaseEn(e, who)}.`);
+    if (e.duration > 0 && !['dispel', 'time'].includes(rk)) parts.push(`Ends early if ${releaseEn(e, who)}.`);
     if (SIMPLE[e.spell]?.breaker) parts.push(SIMPLE[e.spell].breaker.rule.en);
+    // Someone else's magic: the user writing "it broke" does not end it (2-B will ask instead).
+    if (e.source?.kind !== 'me' && settings().strictRelease) {
+        parts.push('This magic only ends the set way. If anyone claims it is broken or tries to force it off, it holds: it may seem to waver for a moment, then it returns.');
+    }
     const src = sourceEn(e.source);
     const cause = String(e.cause || '').trim();
     const why = [src && `from ${src}`, cause].filter(Boolean).join(' — ');

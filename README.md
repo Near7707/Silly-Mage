@@ -46,11 +46,29 @@ You can just type "she turned into a cat" and the AI will play along. A few turn
 - Turns left are always counted from the chat as it is now, so a swipe never uses up a turn twice.
 - A spell that hasn't fired yet is **not** told to the AI, so it can't spoil it.
 
+### Who can break a spell
+
+- Only magic **you** cast (who cast it = **Me**, under *More*) can be dispelled. Magic from anyone or anything else — unknown, an object, a place, a trickster — has no Dispel button: it ends only the set way (turns running out, telling the truth, or a certain act).
+- The AI is also told that such magic holds even if the story claims it broke (setting: **Curses end only the set way**, on by default).
+- Every card has a **⋯** menu with **Force clear (never happened)** for emergencies. It removes the effect and tells the AI nothing.
+
+### Magic rules (optional)
+
+Off by default — cast freely, as before. Turn on **Magic rules** in the settings and spells *you* cast follow these rules (magic from others stays free, but you can't dispel it):
+
+- **Mana**: max 10 (changeable), +1 each turn. Costs: Change 3 · Mind 2 · Illusion 2 · Fate 2 · Dispel 2, and +2 for a spell with no end. Shown as `◆ 7/10` on the status bar.
+- **Cooldown**: a spell you cast rests 3 turns; Dispel rests 2.
+- **Loadout**: you carry up to 6 spells per chat (changeable). Spells you add later rest 3 turns first.
+- **Reload ↻**: once per chat, fill your mana and reset every cooldown. It comes back every 20 turns.
+
+Mana, cooldowns and Reload are worked out from the chat as it is, so deleting or re-rolling messages winds them back too.
+
 ### Settings
 
 - **Look**: Default (follows your theme), Old tome, or Cursed book. Every look has the same buttons in the same places.
 - **Magic in this world**: Common (people shrug it off), Rare (people are surprised), or None (it's just strange).
 - **Connection profile** used for 🎲 Cause and "Fill in". If you leave it empty, your current API is used.
+- **Magic rules**, max mana, loadout size, and **Curses end only the set way**.
 - Language (English / 한국어), the random-form pool, a window-position reset, and backup export/import.
 
 What the AI receives is always short English text (1–2 lines per effect). The AI still replies in whatever language you normally use. At most 4 effects can be active at once.

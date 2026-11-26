@@ -1,7 +1,7 @@
 // Mage data lives only in extension settings (never in character cards, chat files or chat metadata).
 
 export const MODULE = 'mage';
-export const FORMAT = 1;
+export const FORMAT = 2;
 
 const DEFAULTS = Object.freeze({
     format: FORMAT,
@@ -21,7 +21,12 @@ const DEFAULTS = Object.freeze({
     bookSeeded: false,
     winPos: {},             // { phone: {x,y}, pc: {x,y} }
     winCollapsed: false,
-    // chatId -> { effects: Effect[], actions: Action[], undoId: string|null, seq: number }
+    // magic rules (stage 2-A)
+    rules: false,           // Mana · Cooldown · Loadout · Reload (off = free, as before)
+    maxMana: 10,
+    loadoutSize: 6,
+    strictRelease: true,    // magic I did not cast ends only the set way (an extra line for the AI)
+    // chatId -> { effects, actions, undoId, reloads: [{id,t,at}], loadout: string[]|null, loadAdds: [{spell,t,at}] }
     chats: {},
     // branch chats already copied from their parent: chatId -> parent chatId
     branchDone: {},
@@ -41,8 +46,8 @@ export function migrate(s) {
     for (const [k, v] of Object.entries(DEFAULTS)) {
         if (s[k] === undefined) s[k] = structuredClone(v);
     }
-    if (typeof s.format !== 'number') s.format = FORMAT;
-    // Future format upgrades go here: if (s.format < 2) { ...; s.format = 2; }
+    if (typeof s.format !== 'number') s.format = 1;
+    // Format 2 (0.3.0): only magic I cast can be dispelled; for the rest "Dispel" becomes "turns run out".
     if (!['theme', 'tome', 'cursed'].includes(s.skin)) s.skin = 'theme';
     if (!['common', 'rare', 'none'].includes(s.world)) s.world = 'rare';
     for (const k of ['randomPool', 'customForms', 'book']) if (!Array.isArray(s[k])) s[k] = [];
@@ -54,9 +59,35 @@ export function migrate(s) {
         if (!Array.isArray(st.effects)) st.effects = [];
         if (!Array.isArray(st.actions)) st.actions = [];
         if (st.undoId === undefined) st.undoId = null;
+        if (!Array.isArray(st.reloads)) st.reloads = [];
+        if (!Array.isArray(st.loadAdds)) st.loadAdds = [];
+        if (!Array.isArray(st.ledger)) st.ledger = [];
+        if (st.loadout !== null && !Array.isArray(st.loadout)) st.loadout = null;
+    }
+    if (s.format < 2) {
+        for (const st of Object.values(s.chats)) for (const e of st?.effects || []) fixRelease(e);
+        for (const c of s.book) {
+            if (!c?.spec) continue;
+            fixRelease(c.spec);
+            // A card that could now never end (not mine, no end, ended by Dispel before) ends by telling the truth instead.
+            const sp = c.spec;
+            if (sp.release.kind === 'time' && Number(sp.duration) === 0 && !['sleep', 'invisibility'].includes(sp.spell)) sp.release = { kind: 'truth', text: '' };
+        }
+        s.format = 2;
     }
     s.contextCount = Math.min(20, Math.max(0, Number(s.contextCount) || 0));
+    s.maxMana = Math.min(30, Math.max(1, Math.round(Number(s.maxMana) || 10)));
+    s.loadoutSize = Math.min(13, Math.max(1, Math.round(Number(s.loadoutSize) || 6)));
     return s;
+}
+
+/** Magic someone else cast cannot be dispelled by me: its "Dispel" ending becomes "when the turns run out". */
+export function fixRelease(e) {
+    if (!e || typeof e !== 'object') return;
+    if (!e.release || typeof e.release !== 'object') e.release = { kind: 'dispel', text: '' };
+    const mine = e.source?.kind === 'me';
+    if (!mine && e.release.kind === 'dispel') e.release.kind = 'time';
+    if (mine && e.release.kind === 'time') e.release.kind = 'dispel';
 }
 
 let saveFailedOnce = false;
@@ -108,7 +139,7 @@ export function chatState(chatId = currentChatId(), create = false) {
     const s = settings();
     if (!s.chats[chatId]) {
         if (!create) return null;
-        s.chats[chatId] = { effects: [], actions: [], undoId: null };
+        s.chats[chatId] = { effects: [], actions: [], undoId: null, reloads: [], loadout: null, loadAdds: [], ledger: [] };
     }
     return s.chats[chatId];
 }

@@ -62,7 +62,14 @@ function find(view, ref) {
 }
 
 /** Turn messages after index `i` (exclusive). */
-function turnsAfter(view, i) { return view.turnAt.filter(x => x > i); }
+export function turnsAfter(view, i) { return view.turnAt.filter(x => x > i); }
+
+/** Where a stored point sits in the chat now (lenient: found by key, else its old index, never past the end). */
+export function posOf(view, ref) {
+    const i = find(view, ref);
+    if (i === -2) return Math.min(ref.i ?? -1, view.length - 1);
+    return i;
+}
 
 function roll(effectId, key) { return (hash(`${effectId}|${key}`) % 10000) / 10000; }
 
@@ -163,7 +170,7 @@ export function slotsLeft(list = views()) { return Math.max(0, MAX_EFFECTS - liv
 
 // ---------- changing things ----------
 
-function lastRef() {
+export function lastRef() {
     const view = chatView(false);
     const i = view.length - 1;
     return { i, key: i >= 0 ? view.keys[i] : null };
@@ -173,13 +180,15 @@ function lastRef() {
  * Cast one effect per target. `spec` = everything from the cast window except `targets`.
  * @returns {string[]} new effect ids
  */
-export function cast(spec, targets) {
+export function cast(spec, targets, rule = null) {
     const st = chatState(currentChatId(), true);
     if (!st) return [];
     const group = targets.length > 1 ? uid('g') : null;
     const ids = [];
-    for (const target of targets) {
+    for (const [n, target] of targets.entries()) {
         const e = structuredClone(spec);
+        // Magic rules: one cast costs once (on the first person), and starts the spell's cooldown.
+        if (rule) { e.ruled = true; e.cost = n === 0 ? rule.cost : 0; }
         e.id = uid('e');
         e.target = target;
         e.group = group;
@@ -210,13 +219,14 @@ export function judge(effectId, what, via = '') {
     return addAction({ type: 'judge', effectId, what, via, at: lastRef(), delivered: null });
 }
 
-export function dispel(effectIds, by = '') {
+export function dispel(effectIds, by = '', rule = null) {
     const st = chatState(currentChatId(), true);
     if (!st) return null;
     const now = Date.now();
     const done = [];
-    for (const effectId of effectIds) {
+    for (const [n, effectId] of effectIds.entries()) {
         const a = { id: uid('a'), t: now, type: 'dispel', effectId, by, at: lastRef(), batch: effectIds.length > 1 ? now : null };
+        if (rule) { a.ruled = true; a.cost = n === 0 ? rule.cost : 0; }
         st.actions.push(a);
         done.push(a);
     }
@@ -246,7 +256,7 @@ export function undo() {
     return a;
 }
 
-/** Remove an effect that never started (and has nothing to tell the AI). */
+/** Remove an effect as if it never happened (the AI is told nothing). */
 export function removeEffect(effectId) {
     const st = chatState();
     if (!st) return;
@@ -273,6 +283,11 @@ function prune(st) {
     const extra = done.length - 12;
     if (extra <= 0) return;
     const drop = new Set(done.sort((a, b) => a.e.created - b.e.created).slice(0, extra).map(v => v.e.id));
+    // Mana and cooldowns are worked out from what was cast, so dropped casts leave a small record.
+    st.ledger ||= [];
+    for (const e of st.effects) if (drop.has(e.id) && e.ruled) st.ledger.push({ spell: e.spell, t: e.created, at: e.anchor, cost: e.cost || 0 });
+    for (const a of st.actions) if (drop.has(a.effectId) && a.type === 'dispel' && a.ruled) st.ledger.push({ spell: 'dispel', t: a.t, at: a.at, cost: a.cost || 0 });
+    if (st.ledger.length > 60) st.ledger.splice(0, st.ledger.length - 60);
     st.effects = st.effects.filter(e => !drop.has(e.id));
     st.actions = st.actions.filter(a => !drop.has(a.effectId));
 }
@@ -323,6 +338,10 @@ export function copyFromParent() {
     const keep = new Set(from.effects.map(e => e.id));
     from.actions = from.actions.filter(a => keep.has(a.effectId) && actionValid(view, a));
     from.undoId = null;
+    const here = (x) => x?.at?.key == null || view.index.has(x.at.key);
+    from.reloads = (from.reloads || []).filter(here);
+    from.loadAdds = (from.loadAdds || []).filter(here);
+    from.ledger = (from.ledger || []).filter(x => x?.at?.key == null || view.index.has(x.at.key));
     s.branchDone[id] = parent;
     if (from.effects.length) s.chats[id] = from;
     save();

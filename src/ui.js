@@ -2,7 +2,7 @@
 // (Status / Cast / Spellbook) and the panel in SillyTavern's extension settings.
 
 import { t, lang, josa } from './i18n.js';
-import { ctx, settings, save, currentChatId, uid } from './store.js';
+import { ctx, settings, save, currentChatId, uid, fixRelease } from './store.js';
 import {
     SIMPLE, FAMILIES, SPELLS, SPELL_ORDER, FORMS, formById, STAGES, STAGE_MAX, SOURCES, MOTIVES, TRIGGERS, RELEASES,
     VISIBILITY, DURATIONS, MAX_EFFECTS, MOTIVE_SUGGEST, RANDOM_OBJECTS, RANDOM_PLACES,
@@ -14,6 +14,7 @@ import { syncTheme, famColor, colorMode } from './theme.js';
 import { attachWindow, place } from './win.js';
 import { askCause, askForm } from './ai.js';
 import { prefsHtml, prefsClick, prefsChange, prefsFocus } from './prefs.js';
+import { rulesOn, rulesState, isMine, costOf, blockOf, loadout, setLoadout, reload } from './rules.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const toast = (kind, msg) => { try { globalThis.toastr?.[kind]?.(msg, 'Mage'); } catch { /* ignore */ } };
@@ -33,6 +34,8 @@ const ui = {
     lastStatus: new Map(),
     lastChat: null,
     vars: {},
+    loadEdit: null,     // spells being picked in the loadout editor, or null
+    moreOpen: null,     // card whose ⋯ menu is open
 };
 
 let barEl = null;
@@ -196,6 +199,7 @@ function onBarClick(e) {
     const j = e.target.closest('[data-mage-judge]');
     if (j) return doJudge(j.dataset.mageJudge, j.dataset.what, j.dataset.via);
     if (e.target.closest('[data-mage-undo]')) return doUndo();
+    if (e.target.closest('[data-mage-reload]')) return doReload();
     const o = e.target.closest('[data-mage-open]');
     if (o) {
         if (o.dataset.mageOpen) { for (const id of o.dataset.mageOpen.split(',')) ui.opened.add(id); ui.allClosed = false; return openWindow('status', { expand: true }); }
@@ -209,7 +213,8 @@ function renderBar(list) {
     if (!barEl) return;
     const s = settings();
     barEl.className = `mage-bar mage-root mage-skin-${s.skin}`;
-    if (!s.enabled || !currentChatId() || !list.length) { barEl.hidden = true; barEl.innerHTML = ''; return; }
+    const rs = s.enabled && currentChatId() && s.rules ? rulesState() : null;
+    if (!s.enabled || !currentChatId() || (!list.length && !rs)) { barEl.hidden = true; barEl.innerHTML = ''; return; }
     const barSkin = s.skin === 'tome' ? 'theme' : s.skin; // the bar keeps the chat readable; old-book paper only in the window
     const barMode = colorMode(barSkin, syncTheme(barEl, barSkin));
     // One spell cast on two people at once shows as one chip with both pictures, while both
@@ -234,7 +239,13 @@ function renderBar(list) {
     const rest = units.slice(2).flat().length;
     const more = units.length > 2 ? `<button type="button" class="mage-chip mage-more" data-mage-open="">+${rest}</button>` + units.slice(2).map(conds).join('') : '';
     const undoBtn = undoable() ? `<button type="button" class="mage-mini" data-mage-undo title="${esc(t('undo'))}" aria-label="${esc(t('undo'))}">↶</button>` : '';
-    barEl.innerHTML = `<div class="mage-bar-row">${shownHtml}${more}</div>${undoBtn}`
+    let ruleBtns = '';
+    if (rs) {
+        const blue = famColor(FAMILIES.ward.color, barMode);
+        ruleBtns = `<span class="mage-mana" style="--mage-fam:${blue}" title="${esc(t('mana_t', { n: rs.mana, max: rs.max }))}">◆ ${rs.mana}/${rs.max}</span>`
+            + `<button type="button" class="mage-mini mage-reload${rs.reloadReady ? '' : ' mage-off'}" data-mage-reload style="--mage-fam:${blue}" title="${esc(rs.reloadReady ? t('reload_t') : t('reload_wait', { n: rs.reloadIn }))}" aria-label="${esc(t('reload'))}">↻</button>`;
+    }
+    barEl.innerHTML = `<div class="mage-bar-row">${shownHtml}${more}</div>${ruleBtns}${undoBtn}`
         + `<button type="button" class="mage-mini" data-mage-open="" title="${esc(t('open_status'))}" aria-label="${esc(t('open_status'))}">⌃</button>`;
     barEl.hidden = false;
 }
@@ -396,13 +407,22 @@ function sourceLabel(src) {
 function releaseLabel(e) {
     const r = e.release || { kind: 'dispel' };
     const br = SIMPLE[e.spell]?.breaker;
+    const timed = Number(e.duration) > 0;
+    if (br && r.kind === 'time' && !timed) return br.rule[lang()];
     const pre = br ? `${br.rule[lang()]} · ` : '';
-    return pre + releaseBase(r);
+    return pre + releaseBase(r, isMine(e), timed);
 }
 
-function releaseBase(r) {
+function releaseBase(r, mine = true, timed = true) {
+    if (r.kind === 'time') return timed ? t('rel_time') : t('rel_time_never');
     const base = r.kind === 'dispel' ? t('rel_dispel') : r.kind === 'truth' ? (r.text ? t('rel_truth_about', { x: r.text }) : t('rel_truth')) : (r.text || t('rel_action'));
-    return r.kind === 'dispel' ? base : `${base} · ${t('rel_dispel')}`;
+    // Only magic I cast can also be dispelled.
+    return r.kind === 'dispel' || !mine ? base : `${base} · ${t('rel_dispel')}`;
+}
+
+/** No way to end it at all: not mine, no end, no built-in breaker. */
+function endless(d) {
+    return !isMine(d) && (d.release?.kind || 'time') === 'time' && Number(d.duration) === 0 && !SIMPLE[d.spell]?.breaker;
 }
 
 function stageCells(v) {
@@ -448,11 +468,9 @@ function cardHtml(v, open) {
             if (e.visibility === 'targetUnaware') rows += row(t('r_vis'), esc(t('vis_targetUnaware')));
         }
         if (v.status === 'ended') rows += row(t('r_note'), esc(t('ending_note')));
+        if (v.status !== 'ended' && !isMine(e)) rows += `<div class="mage-row mage-nodispel"><dd>${esc(t('no_dispel_note'))}</dd></div>`;
     }
-    const acts = open && v.status !== 'ended'
-        ? `<div class="mage-acts">${condButtons(v).map(b => condBtnHtml(v, b, 'mage-btn mage-cond-btn')).join('')}`
-        + `<button type="button" class="mage-btn mage-small" data-mage-dispel="${esc(e.id)}">${iconSvg('dispel', { size: 16 })}<span class="mage-ell">${esc(spellName('dispel'))}</span></button></div>`
-        : '';
+    const acts = open ? cardActs(v) : '';
     return `<div class="mage-card mage-st-${v.status}${open ? ' open' : ''}" data-id="${esc(e.id)}" style="--mage-fam:${famCol(fam)}">`
         + `<button type="button" class="mage-card-head" data-mage-toggle="${esc(e.id)}" aria-expanded="${open}">`
         + framedIcon(hide ? 'polymorph' : SPELLS[e.spell]?.icon, { skin: s.skin, curse: isCurse(e) })
@@ -460,6 +478,31 @@ function cardHtml(v, open) {
         + (open ? '' : `<span class="mage-card-sub">${sub}</span>`) + '</span>'
         + `<span class="mage-caret">${open ? '▴' : '▾'}</span></button>`
         + (rows ? `<dl class="mage-rows">${rows}</dl>` : '') + acts + '</div>';
+}
+
+/** The buttons under an open card: condition buttons, Dispel (only magic I cast), and ⋯ → force clear. */
+function cardActs(v) {
+    const e = v.e;
+    let h = '';
+    if (v.status !== 'ended') {
+        h += condButtons(v).map(b => condBtnHtml(v, b, 'mage-btn mage-cond-btn')).join('');
+        if (isMine(e)) {
+            const rs = rulesState();
+            const block = rs.on ? blockOf('dispel', 0, true, rs) : null;
+            const tail = !rs.on ? '' : block ? ` · ${blockText(block)}` : ` ◆${costOf('dispel', 0)}`;
+            h += `<button type="button" class="mage-btn mage-small" data-mage-dispel="${esc(e.id)}"${block ? ' disabled' : ''}>${iconSvg('dispel', { size: 16 })}<span class="mage-ell">${esc(spellName('dispel') + tail)}</span></button>`;
+        }
+    }
+    const more = ui.moreOpen === e.id;
+    h += `<button type="button" class="mage-btn mage-small mage-dots" data-mage-more="${esc(e.id)}" aria-expanded="${more}" title="${esc(t('more_menu'))}" aria-label="${esc(t('more_menu'))}">⋯</button>`;
+    if (more) h += `<div class="mage-forcebox"><button type="button" class="mage-btn mage-small mage-danger-btn" data-mage-force="${esc(e.id)}"><span class="mage-ell">${esc(t('force_clear'))}</span></button></div>`;
+    return `<div class="mage-acts">${h}</div>`;
+}
+
+function blockText(b) {
+    if (b.why === 'mana') return t('block_mana', { n: b.n });
+    if (b.why === 'cooldown') return t('block_cd', { n: b.n });
+    return t('block_loadout');
 }
 
 function statusFoot() {
@@ -497,7 +540,7 @@ function newDraft() {
         form: { id: 'cat' }, duration: 3,
         source: { kind: 'unknown', name: '' }, motive: '',
         trigger: { kind: 'now', turns: 2, chance: 25, text: '' },
-        method: '', release: { kind: 'dispel', text: '' }, visibility: 'all', surprise: false,
+        method: '', release: { kind: 'time', text: '' }, visibility: 'all', surprise: false,
         cause: '', title: '', dispelWhat: '', touched: {},
     };
 }
@@ -551,30 +594,49 @@ function formValue(f) {
 function dispelOptions(d) {
     const tg = resolveTargets(d)[0];
     if (!tg) return [];
-    const list = views().filter(v => v.status !== 'ended' && tKey(v.e.target) === tKey(tg));
+    const list = views().filter(v => v.status !== 'ended' && tKey(v.e.target) === tKey(tg) && isMine(v.e));
     const opts = list.map(v => [v.e.id, effectTitle(v.e) + (v.status === 'pending' ? ` (${t('st_pending')})` : '')]);
     const fams = [...new Set(list.map(v => SPELLS[v.e.spell]?.family))].filter(Boolean);
     if (list.length > 1) for (const f of fams) opts.push([`fam:${f}`, t('dispel_family', { fam: famName(f) })]);
     return opts;
 }
 
+function nothingDispelText(d) {
+    const tg = resolveTargets(d)[0];
+    const any = tg && views().some(v => v.status !== 'ended' && tKey(v.e.target) === tKey(tg));
+    return t(any ? 'nothing_dispel_mine' : 'nothing_dispel', { name: targetName(tg) });
+}
+
 function castHtml() {
     const d = ui.draft || (ui.draft = newDraft());
     const L = lang();
     if (!currentChatId() && ui.editCard === null) return `<div class="mage-empty">${esc(t('no_chat'))}</div>`;
+    if (ui.loadEdit && ui.editCard === null) return loadEditHtml();
     let h = '';
+    const rs = ui.editCard === null && rulesOn() ? rulesState() : null;
+    if (rs && !d.fromCard && !rs.loadout.includes(d.spell) && rs.loadout.length) setSpell(d, rs.loadout[0]);
     if (ui.editCard !== null) {
         h += `<div class="mage-editing">${esc(ui.editCard ? t('editing_card') : t('new_card'))}</div>`;
         h += field(t('card_name'), `<input class="mage-input" data-f="title" maxlength="40" value="${esc(d.title)}" placeholder="${esc(t('card_name_ph'))}">`);
     }
     const spellOpts = SPELL_ORDER.map(id => [id, `${spellName(id)} — ${famName(SPELLS[id].family)}`]);
+    if (rs) {
+        h += `<div class="mage-loadbar"><span class="mage-ell">${esc(t('load_bar', { n: rs.loadout.length, max: settings().loadoutSize }))}</span>`
+            + `<span class="mage-mana" style="--mage-fam:${famCol('ward')}">◆ ${rs.mana}/${rs.max}</span>`
+            + `<button type="button" class="mage-btn mage-small" data-mage-loadout><span class="mage-ell">${esc(t('load_change'))}</span></button></div>`;
+    }
     if (ui.editCard === null) h += field(t('f_target'), sel('target', targetOptions(d), d.target));
-    h += field(t('f_spell'), sel('spell', ui.editCard !== null ? spellOpts.filter(o => o[0] !== 'dispel') : spellOpts, d.spell));
+    if (rs) {
+        h += `<div class="mage-field"><span class="mage-flabel">${esc(t('f_spell'))}</span><div class="mage-lgrid">`
+            + rs.loadout.map(id => spellTile(id, d, rs)).join('') + '</div></div>';
+        if (!rs.loadout.includes(d.spell)) h += `<div class="mage-note">${esc(spellName(d.spell))} · ${esc(t('block_loadout'))}</div>`;
+    } else h += field(t('f_spell'), sel('spell', ui.editCard !== null ? spellOpts.filter(o => o[0] !== 'dispel') : spellOpts, d.spell));
+    if (rs && d.spell !== 'dispel' && !isMine(d)) h += `<div class="mage-hint">${esc(t('free_note'))}</div>`;
     h += `<div class="mage-spell-desc">${esc(t(`desc_${d.spell}`))}</div>`;
 
     if (d.spell === 'dispel') {
         const opts = dispelOptions(d);
-        if (!opts.length) h += `<div class="mage-note">${esc(t('nothing_dispel', { name: targetName(resolveTargets(d)[0]) }))}</div>`;
+        if (!opts.length) h += `<div class="mage-note">${esc(nothingDispelText(d))}</div>`;
         else {
             if (!opts.some(o => o[0] === d.dispelWhat)) d.dispelWhat = opts[0][0];
             h += field(t('f_dispel_what'), sel('dispelWhat', opts, d.dispelWhat));
@@ -610,7 +672,8 @@ function castHtml() {
     const durBtns = DURATIONS.map(n => `<button type="button" class="mage-seg${Number(d.duration) === n ? ' on' : ''}" data-mage-dur="${n}">${esc(n ? t('dur_n', { n }) : t('dur_none'))}</button>`).join('');
     h += `<div class="mage-field"><span class="mage-flabel">${esc(t('f_duration'))}</span><div class="mage-segs">${durBtns}</div>`
         + (!DURATIONS.includes(Number(d.duration)) ? `<div class="mage-hint">${esc(t('dur_custom_now', { n: d.duration }))}</div>` : '')
-        + (Number(d.duration) === 0 ? `<div class="mage-hint">${esc(t('dur_none_hint', { r: releaseLabel(d) }))}</div>` : '') + '</div>';
+        + (Number(d.duration) === 0 ? (endless(d) ? `<div class="mage-hint mage-warn">${esc(t('dur_none_warn'))}</div>`
+            : `<div class="mage-hint">${esc(t('dur_none_hint', { r: releaseLabel(d) }))}</div>`) : '') + '</div>';
     if (d.method === 'stacked') {
         h += field(t('f_condition'), `<input class="mage-input" data-f="trigText" maxlength="40" value="${esc(d.trigger.text)}" placeholder="${esc(t('cond_ph'))}">`);
     }
@@ -620,6 +683,43 @@ function castHtml() {
     h += `<button type="button" class="mage-more-btn" data-mage-details aria-expanded="${ui.details}">${ui.details ? '▴' : '▾'} ${esc(t('details'))}</button>`;
     if (ui.details) h += detailsHtml(d);
     return h + causeBox(d);
+}
+
+/** One spell in the loadout grid: icon, name, mana cost (or how long it still rests). */
+function spellTile(id, d, rs) {
+    const fam = SPELLS[id].family;
+    const cd = rs.cooldown(id);
+    const cost = costOf(id, id === d.spell ? d.duration : 3);
+    return `<button type="button" class="mage-lspell${id === d.spell ? ' on' : ''}${cd ? ' mage-resting' : ''}" data-mage-pick="${id}" style="--mage-fam:${famCol(fam)}">`
+        + iconSvg(SPELLS[id].icon, { size: 18 })
+        + `<span class="mage-ell">${esc(spellName(id))}</span>`
+        + `<span class="mage-lcost">${esc(cd ? t('cd_n', { n: cd }) : `◆${cost}`)}</span></button>`;
+}
+
+function loadEditHtml() {
+    const max = settings().loadoutSize;
+    const picked = ui.loadEdit;
+    let h = `<div class="mage-editing">${esc(t('load_edit_t', { max }))} · ${picked.length}/${max}</div>`;
+    h += `<div class="mage-hint">${esc(t('load_hint'))}</div><div class="mage-lgrid">`;
+    h += SPELL_ORDER.map(id => {
+        const on = picked.includes(id);
+        return `<button type="button" class="mage-lspell${on ? ' on' : ''}" data-mage-load-toggle="${id}" aria-pressed="${on}" style="--mage-fam:${famCol(SPELLS[id].family)}">`
+            + iconSvg(SPELLS[id].icon, { size: 18 }) + `<span class="mage-ell">${esc(spellName(id))}</span>`
+            + `<span class="mage-lcost">${on ? '✓' : `◆${costOf(id, 3)}`}</span></button>`;
+    }).join('');
+    return h + '</div>';
+}
+
+function setSpell(d, v) {
+    d.spell = v;
+    if (v !== 'polymorph' && d.method === 'stacked') d.method = '';
+    if (v === 'dispel') { d.dispelWhat = ''; if (['both', 'random'].includes(d.target)) d.target = 'user'; }
+}
+
+/** Who cast it decides how it can end: only my own magic can be dispelled. */
+function fitRelease(d) {
+    if (isMine(d) && d.release.kind === 'time') d.release.kind = 'dispel';
+    if (!isMine(d) && d.release.kind === 'dispel') d.release.kind = 'time';
 }
 
 function detailsHtml(d) {
@@ -645,8 +745,9 @@ function detailsHtml(d) {
             h += `<label class="mage-check"><input type="checkbox" data-f="surprise"${d.surprise ? ' checked' : ''}><span>${esc(t('surprise'))}</span></label>`;
         }
     }
-    h += field(t('f_release'), sel('relKind', RELEASES.map(k => [k, t(`rel_${k}`)]), d.release.kind));
-    if (d.release.kind !== 'dispel') {
+    const rels = isMine(d) ? RELEASES : ['time', ...RELEASES.filter(k => k !== 'dispel')];
+    h += field(t('f_release'), sel('relKind', rels.map(k => [k, t(`rel_${k}`)]), d.release.kind));
+    if (!['dispel', 'time'].includes(d.release.kind)) {
         h += field(d.release.kind === 'truth' ? t('rel_truth_text') : t('rel_action_text'),
             `<input class="mage-input" data-f="relText" maxlength="60" value="${esc(d.release.text)}" placeholder="${esc(t(d.release.kind === 'truth' ? 'rel_truth_ph' : 'rel_action_ph'))}">`);
     }
@@ -668,6 +769,10 @@ function causeBox() {
 }
 
 function castFoot() {
+    if (ui.loadEdit && ui.editCard === null) {
+        return `<button type="button" class="mage-btn" data-mage-load-cancel><span class="mage-ell">${esc(t('cancel'))}</span></button>`
+            + `<button type="button" class="mage-btn mage-primary" data-mage-load-save><span class="mage-ell">${esc(t('save'))}</span></button>`;
+    }
     if (ui.editCard !== null) {
         return `<button type="button" class="mage-btn" data-mage-card-cancel><span class="mage-ell">${esc(t('cancel'))}</span></button>`
             + (ui.editCard ? `<button type="button" class="mage-btn mage-danger-btn" data-mage-card-del><span class="mage-ell">${esc(t('delete'))}</span></button>` : '')
@@ -676,7 +781,21 @@ function castFoot() {
     const off = !currentChatId();
     return `<button type="button" class="mage-btn mage-icon-btn" data-mage-view="book" title="${esc(t('tab_book'))}" aria-label="${esc(t('tab_book'))}">📖</button>`
         + `<button type="button" class="mage-btn" data-mage-cause${off ? ' disabled' : ''}><span class="mage-ell">${esc(ui.cause.busy ? t('cancel') : t('cause_roll'))}</span></button>`
-        + `<button type="button" class="mage-btn mage-primary" data-mage-cast${off ? ' disabled' : ''}><span class="mage-ell">✦ ${esc(ui.draft?.spell === 'dispel' ? spellName('dispel') : t('cast'))}</span></button>`;
+        + castButton(off);
+}
+
+/** The cast button: with the magic rules on, it shows the cost, or why I cannot cast yet. */
+function castButton(off) {
+    const d = ui.draft;
+    let label = `✦ ${d?.spell === 'dispel' ? spellName('dispel') : t('cast')}`;
+    let block = null;
+    if (d && !off && rulesOn()) {
+        const mine = d.spell === 'dispel' || isMine(d);
+        block = blockOf(d.spell, d.spell === 'dispel' ? 0 : d.duration, mine);
+        if (block) label = blockText(block);
+        else if (mine) label += ` ◆${costOf(d.spell, d.spell === 'dispel' ? 0 : d.duration)}`;
+    }
+    return `<button type="button" class="mage-btn mage-primary" data-mage-cast${off || block ? ' disabled' : ''}><span class="mage-ell">${esc(label)}</span></button>`;
 }
 
 // ---------- Spellbook ----------
@@ -691,7 +810,7 @@ function seedBook() {
     s.book.push(
         mk(t('seed_water'), { spell: 'polymorph', form: { id: 'cat' }, method: 'stacked', duration: 0,
             trigger: { kind: 'now', turns: 2, chance: 25, text: t('seed_water_cond') },
-            source: { kind: 'object', name: RANDOM_OBJECTS[L][0] }, motive: 'punishment' }),
+            source: { kind: 'object', name: RANDOM_OBJECTS[L][0] }, motive: 'punishment', release: { kind: 'truth', text: '' } }),
         mk(t('seed_turtle'), { spell: 'polymorph', form: { id: 'turtle' }, duration: 3, motive: 'prank' }),
         mk(t('seed_pocket'), { spell: 'mite', duration: 5, source: { kind: 'object', name: RANDOM_OBJECTS[L][1] }, motive: 'mistake' }),
     );
@@ -774,9 +893,41 @@ function doUndo() {
 
 function doDispel(effectId) {
     const v = views().find(x => x.e.id === effectId);
-    if (!v) return;
-    dispel([effectId]); // a dispel is undoable like a judgment
+    if (!v || !isMine(v.e)) return;
+    const rule = ruleFor('dispel', 0);
+    if (rule === false) return;
+    dispel([effectId], '', rule); // a dispel is undoable like a judgment
     toast('info', t('toast_dispel', { title: effectTitle(v.e) }));
+    changed();
+}
+
+/** With the rules on: null if I may cast for free, { cost } to pay, or false (blocked, already told). */
+function ruleFor(spell, duration, mine = true) {
+    if (!rulesOn()) return null;
+    const block = blockOf(spell, duration, mine);
+    if (block) { toast('warning', blockText(block)); return false; }
+    return mine ? { cost: costOf(spell, duration) } : null;
+}
+
+function doReload() {
+    const rs = rulesState();
+    if (!rs.on) return;
+    if (!rs.reloadReady) return toast('info', t('reload_wait', { n: rs.reloadIn }));
+    confirmBox(t('reload_q')).then(ok => {
+        if (!ok || !reload()) return;
+        toast('success', t('reloaded'));
+        changed();
+    });
+}
+
+async function doForce(effectId) {
+    const v = views().find(x => x.e.id === effectId);
+    if (!v) return;
+    const ok = await confirmBox(t('force_q', { title: effectTitle(v.e), name: targetName(v.e.target) }));
+    if (!ok) return;
+    removeEffect(effectId); // gone as if it never happened: the AI is told nothing
+    ui.moreOpen = null;
+    toast('info', t('forced'));
     changed();
 }
 
@@ -802,6 +953,7 @@ function buildSpec(d) {
         surprise: !!d.surprise && d.method !== 'stacked' && d.trigger.kind !== 'now',
         title: String(d.title || '').trim(),
     };
+    fixRelease(spec);
     if (SIMPLE[d.spell]?.variants) spec.variant = d.variant || SIMPLE[d.spell].variants[0];
     if (SIMPLE[d.spell]?.needsX) spec.x = String(d.x || '').trim();
     if (d.spell === 'polymorph') {
@@ -818,6 +970,7 @@ function validate(d, forCard = false) {
     if (d.method === 'stacked' && !String(d.trigger.text || '').trim()) return t('need_cond');
     if (d.method !== 'stacked' && (d.method === 'curse' || d.trigger.kind === 'condition') && !String(d.trigger.text || '').trim()) return t('need_cond');
     if (d.release.kind === 'action' && !String(d.release.text || '').trim()) return t('need_action');
+    if (endless(d)) return t('need_end');
     if (forCard) return '';
     return '';
 }
@@ -836,14 +989,16 @@ function doCast() {
     if (!d || !currentChatId()) return;
     if (d.spell === 'dispel') {
         const opts = dispelOptions(d);
-        if (!opts.length) return toast('warning', t('nothing_dispel', { name: targetName(resolveTargets(d)[0]) }));
+        if (!opts.length) return toast('warning', nothingDispelText(d));
         let ids = [];
         if (String(d.dispelWhat).startsWith('fam:')) {
             const fam = d.dispelWhat.slice(4);
             const tg = tKey(resolveTargets(d)[0]);
             ids = views().filter(v => v.status !== 'ended' && tKey(v.e.target) === tg && SPELLS[v.e.spell]?.family === fam).map(v => v.e.id);
         } else ids = [d.dispelWhat];
-        dispel(ids, String(d.cause || '').trim() || sourceText(d));
+        const rule = ruleFor('dispel', 0);
+        if (rule === false) return;
+        dispel(ids, String(d.cause || '').trim() || sourceText(d), rule);
         toast('success', t('toast_dispel_n', { n: ids.length }));
         ui.cause.preview = '';
         ui.view = 'status';
@@ -861,10 +1016,12 @@ function doCast() {
             && (v.e.spell === d.spell || (size.has(v.e.spell) && size.has(d.spell))));
         if (clash) return toast('warning', t('clash', { name: targetName(tg), title: effectTitle(clash.e) }));
     }
+    const rule = ruleFor(d.spell, d.duration, isMine(d));
+    if (rule === false) return;
     const spec = buildSpec(d);
     if (['object', 'place'].includes(spec.source.kind) && !spec.source.name) spec.source.name = randomName(spec.source.kind);
     if (spec.form?.custom) rememberCustomForm(spec.form);
-    const ids = cast(spec, targets);
+    const ids = cast(spec, targets, rule);
     ui.opened = new Set(ids.slice(0, 1));
     ui.allClosed = false;
     toast('success', spec.surprise ? t('toast_cast_secret') : t('toast_cast', { title: effectTitle({ ...spec, target: targets[0] }) }));
@@ -960,7 +1117,7 @@ function applyMotive(d) {
     if (!sug) return;
     if (sug.duration !== undefined && !d.touched.duration) d.duration = sug.duration;
     if (sug.trigger && !d.touched.trigger && d.method === '') d.trigger.kind = sug.trigger;
-    if (sug.release && !d.touched.release) d.release.kind = sug.release;
+    if (sug.release && !d.touched.release) { d.release.kind = sug.release; fitRelease(d); }
 }
 
 function loadCard(id, edit) {
@@ -969,6 +1126,8 @@ function loadCard(id, edit) {
     const keepTarget = ui.draft?.target;
     ui.draft = { ...newDraft(), ...structuredClone(c.spec), touched: {} };
     ui.draft.title = c.name;
+    ui.draft.fromCard = !edit;
+    fitRelease(ui.draft);
     if (keepTarget && !edit) ui.draft.target = keepTarget;
     if (!ui.draft.trigger) ui.draft.trigger = { kind: 'now', turns: 2, chance: 25, text: '' };
     ui.details = edit || !!(ui.draft.method || ui.draft.trigger.kind !== 'now');
@@ -1036,6 +1195,7 @@ function onWinClick(e) {
     if ((el = q('[data-mage-view]'))) {
         if (el.closest('.mage-head')) return;
         ui.view = el.dataset.mageView;
+        ui.loadEdit = null;
         if (ui.view !== 'cast') ui.editCard = null;
         if (ui.view === 'cast' && (!ui.draft || ui.editCard !== null)) { ui.editCard = null; ui.draft = newDraft(); }
         if (settings().winCollapsed) { settings().winCollapsed = false; save(); }
@@ -1050,6 +1210,27 @@ function onWinClick(e) {
     }
     if ((el = q('[data-mage-judge]'))) return doJudge(el.dataset.mageJudge, el.dataset.what, el.dataset.via);
     if ((el = q('[data-mage-dispel]'))) return doDispel(el.dataset.mageDispel);
+    if ((el = q('[data-mage-more]'))) { ui.moreOpen = ui.moreOpen === el.dataset.mageMore ? null : el.dataset.mageMore; return rerender(); }
+    if ((el = q('[data-mage-force]'))) return doForce(el.dataset.mageForce);
+    if (q('[data-mage-reload]')) return doReload();
+    if ((el = q('[data-mage-pick]'))) { setSpell(ui.draft, el.dataset.magePick); ui.draft.fromCard = false; return rerender(); }
+    if (q('[data-mage-loadout]')) { ui.loadEdit = [...loadout()]; return rerender(); }
+    if ((el = q('[data-mage-load-toggle]'))) {
+        const id = el.dataset.mageLoadToggle;
+        const max = settings().loadoutSize;
+        if (ui.loadEdit.includes(id)) ui.loadEdit = ui.loadEdit.filter(x => x !== id);
+        else if (ui.loadEdit.length >= max) toast('warning', t('load_full', { max }));
+        else ui.loadEdit.push(id);
+        return rerender();
+    }
+    if (q('[data-mage-load-cancel]')) { ui.loadEdit = null; return rerender(); }
+    if (q('[data-mage-load-save]')) {
+        if (!ui.loadEdit.length) return toast('warning', t('load_empty'));
+        setLoadout(ui.loadEdit);
+        ui.loadEdit = null;
+        toast('success', t('load_saved'));
+        return changed();
+    }
     if (q('[data-mage-undo]')) return doUndo();
     if ((el = q('[data-mage-dur]'))) { ui.draft.duration = Number(el.dataset.mageDur); ui.draft.touched.duration = true; return rerender(); }
     if (q('[data-mage-details]')) { ui.details = !ui.details; return rerender(); }
@@ -1076,15 +1257,11 @@ function onWinChange(e) {
     const v = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
     switch (f) {
         case 'target': d.target = v; d.dispelWhat = ''; break;
-        case 'spell':
-            d.spell = v;
-            if (v !== 'polymorph' && d.method === 'stacked') d.method = '';
-            if (v === 'dispel') { d.dispelWhat = ''; if (['both', 'random'].includes(d.target)) d.target = 'user'; }
-            break;
+        case 'spell': setSpell(d, v); break;
         case 'formSel': setForm(v); break;
         case 'dispelWhat': d.dispelWhat = v; return;
         case 'variant': d.variant = v; break;
-        case 'srcKind': d.source.kind = v; break;
+        case 'srcKind': d.source.kind = v; fitRelease(d); break;
         case 'motive': d.motive = v; applyMotive(d); break;
         case 'method':
             d.method = v;
@@ -1154,6 +1331,8 @@ export function refresh() {
         ui.allClosed = false;
         ui.cause.ctl?.abort();
         ui.cause.preview = '';
+        ui.loadEdit = null;
+        ui.moreOpen = null;
         if (ui.editCard === null) ui.draft = null;
     }
     ui.lastStatus = new Map(all.map(v => [v.e.id, v.status]));

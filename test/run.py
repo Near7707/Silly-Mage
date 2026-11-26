@@ -58,7 +58,10 @@ def cast(page, spell='polymorph', form=None, duration=None, target=None, more=No
     page.click('[data-mage-view="cast"]')
     if target:
         page.select_option('[data-f="target"]', target)
-    page.select_option('[data-f="spell"]', spell)
+    if page.query_selector('.mage-lgrid'):
+        page.click(f'[data-mage-pick="{spell}"]')
+    else:
+        page.select_option('[data-f="spell"]', spell)
     if form:
         page.select_option('[data-f="formSel"]', form)
     if duration is not None:
@@ -68,6 +71,19 @@ def cast(page, spell='polymorph', form=None, duration=None, target=None, more=No
             page.click('[data-mage-details]')
         more(page)
     page.click('[data-mage-cast]')
+
+
+def mine(pg):
+    pg.select_option('[data-f="srcKind"]', 'me')
+
+
+def rules_on(page, on=True):
+    page.evaluate(f"""(() => {{ const el = document.querySelector('#mage_settings [data-mage-p="rules"]'); el.checked = {'true' if on else 'false'}; el.dispatchEvent(new Event('change', {{ bubbles: true }})); }})()""")
+    page.wait_for_timeout(80)
+
+
+def mana(page):
+    return page.inner_text('#mage_bar .mage-mana').replace('◆', '').strip()
 
 
 def main():
@@ -132,10 +148,14 @@ def main():
             check('1/4' in page.inner_text('#mage_bar'), 'swiping the message the press was bound to cancels it')
             page.screenshot(path=os.path.join(SHOTS, 'curse_phone.png'))
             open_win(page); page.click('[data-mage-view="status"]')
-            page.click('.mage-card [data-mage-dispel]')
+            check(page.query_selector('.mage-card [data-mage-dispel]') is None, 'a curse from an object has no Dispel button')
+            check('cannot dispel' in page.inner_text('.mage-card'), 'card says why')
+            page.click('.mage-card [data-mage-more]')
+            page.click('.mage-card [data-mage-force]')
+            page.wait_for_timeout(100)
             turn(page)
-            check('was just dispelled' in prompt(page), 'dispel note')
-            page.click('[data-mage-undo]') if page.is_enabled('.mage-foot [data-mage-undo]') else None
+            check(prompt(page) == '', 'force clear: nothing at all is told to the AI')
+            check(not page.is_visible('#mage_bar'), 'force clear removes it from the bar')
             check(not errors, f'no errors ({errors[:3]})')
             page.close()
 
@@ -165,7 +185,7 @@ def main():
 
             print('4. Branch copies effects cast before the branch point')
             page, errors = open_page(browser)
-            cast(page, form='b:cat', duration=0)
+            cast(page, form='b:cat', duration=0, more=mine)
             turn(page)
             turn(page)
             turn(page)
@@ -283,7 +303,7 @@ def main():
 
             print('10. Pictures: chips show the target picture, "both" shares one chip')
             page, errors = open_page(browser)
-            cast(page, spell='titan', duration=5, target='both')
+            cast(page, spell='titan', duration=5, target='both', more=mine)
             page.wait_for_timeout(150)
             chips = page.query_selector_all('#mage_bar .mage-chip:not(.mage-more)')
             check(len(chips) == 1, f'"both" makes one chip ({len(chips)})')
@@ -316,6 +336,108 @@ def main():
             page.wait_for_timeout(150)
             check(len(page.query_selector_all('#mage_bar .mage-chip:not(.mage-more)')) == 1 and not page.query_selector('#mage_bar .mage-pair'), 'waking one splits them')
             page.screenshot(path=os.path.join(SHOTS, 'pics_fallback.png'), clip={'x': 0, 'y': 600, 'width': 420, 'height': 260})
+            check(not errors, f'no errors ({errors[:3]})')
+            page.close()
+
+            print('11. Magic rules: mana, cooldown, rewind, Reload, Loadout, who can dispel')
+            page, errors = open_page(browser, 'fresh', 390, 844)
+            cast(page, form='b:cat', duration=3)  # rules off: free, unknown caster
+            check(page.query_selector('#mage_bar .mage-mana') is None, 'rules off: no mana chip')
+            turn(page)
+            check('only ends the set way' in prompt(page), 'someone else\'s magic: the "set way only" line goes to the AI')
+            open_win(page); page.click('[data-mage-view="status"]')
+            page.click('.mage-card [data-mage-more]'); page.click('.mage-card [data-mage-force]'); page.wait_for_timeout(100)
+            rules_on(page)
+            check(page.is_visible('#mage_bar .mage-mana') and mana(page) == '10/10', 'rules on: mana chip 10/10 even with nothing cast')
+            cast(page, form='b:cat', duration=3, more=mine)
+            check(mana(page) == '7/10', f'Polymorph by me costs 3 ({mana(page)})')
+            check('only ends the set way' not in page.evaluate('window.__fakeST.livePrompt || ""'), 'my own magic gets no "set way" line')
+            open_win(page); page.click('[data-mage-view="cast"]')
+            check(page.is_visible('.mage-lgrid') and len(page.query_selector_all('.mage-lgrid .mage-lspell')) == 6, 'cast tab shows the 6-spell loadout grid')
+            page.click('[data-mage-pick="polymorph"]')
+            if page.get_attribute('[data-mage-details]', 'aria-expanded') != 'true': page.click('[data-mage-details]')
+            mine(page)
+            check(page.is_disabled('[data-mage-cast]') and 'turns' in page.inner_text('[data-mage-cast]'), 'Polymorph rests: cast button says when')
+            check('mage-resting' in (page.get_attribute('[data-mage-pick="polymorph"]', 'class') or ''), 'resting spell is dimmed in the grid')
+            page.screenshot(path=os.path.join(SHOTS, 'rules_cast_en.png'))
+            turn(page)
+            check(mana(page) == '8/10', f'+1 mana per turn ({mana(page)})')
+            swipe(page)
+            check(mana(page) == '8/10', 'a swipe does not add mana twice')
+            dele(page); dele(page)
+            check(mana(page) == '7/10', f'deleting the turn takes its mana back ({mana(page)})')
+            turn(page); turn(page); turn(page)
+            check(mana(page) == '10/10', 'mana stops at the max')
+            # Dispel by me: costs 2, cooldown 2
+            cast(page, spell='truth', duration=0, target='user', more=mine)
+            check(mana(page) == '6/10', f'no end costs +2 (Truth 2+2) ({mana(page)})')
+            open_win(page); page.click('[data-mage-view="status"]')
+            card = '.mage-card.open'
+            check(page.query_selector(f'{card} [data-mage-dispel]') is not None, 'my own spell has a Dispel button')
+            page.click(f'{card} [data-mage-dispel]')
+            check(mana(page) == '4/10', f'Dispel costs 2 ({mana(page)})')
+            page.click('#mage_bar [data-mage-undo]')
+            check(mana(page) == '6/10', 'undoing the Dispel gives the mana back')
+            # Reload
+            page.evaluate('window.__confirmAnswer = true')
+            page.click('#mage_bar [data-mage-reload]'); page.wait_for_timeout(100)
+            check(mana(page) == '10/10', 'Reload fills mana')
+            check('mage-off' in page.get_attribute('#mage_bar [data-mage-reload]', 'class'), 'Reload is used up')
+            open_win(page); page.click('[data-mage-view="cast"]')
+            page.click('[data-mage-pick="polymorph"]')
+            if page.get_attribute('[data-mage-details]', 'aria-expanded') != 'true': page.click('[data-mage-details]')
+            mine(page)
+            check(page.is_enabled('[data-mage-cast]') and '◆3' in page.inner_text('[data-mage-cast]'), 'Reload resets the cooldown')
+            # Loadout swap: a new spell starts resting
+            page.click('[data-mage-loadout]')
+            page.click('[data-mage-load-toggle="charm"]')
+            page.click('[data-mage-load-toggle="titan"]')
+            page.screenshot(path=os.path.join(SHOTS, 'rules_loadout.png'))
+            page.click('[data-mage-load-save]')
+            check(page.query_selector('[data-mage-pick="titan"]') is not None and page.query_selector('[data-mage-pick="charm"]') is None, 'loadout saved')
+            check('mage-resting' in page.get_attribute('[data-mage-pick="titan"]', 'class'), 'a spell just put in rests 3 turns')
+            for _ in range(20): turn(page)
+            check('mage-off' not in page.get_attribute('#mage_bar [data-mage-reload]', 'class'), 'Reload comes back after 20 turns')
+            # Someone else's magic: free, no Dispel, not in my Dispel list
+            cast(page, spell='sleep', duration=5, target='char:mira.png', more=lambda pg: pg.select_option('[data-f="srcKind"]', 'unknown'))
+            check(mana(page) == '10/10', f'magic I did not cast is free ({mana(page)})')
+            open_win(page); page.click('[data-mage-view="cast"]'); page.click('[data-mage-pick="dispel"]')
+            page.select_option('[data-f="target"]', 'char:mira.png')
+            check('cast' in page.inner_text('.mage-note').lower(), 'Dispel lists nothing: that Sleep is not mine')
+            page.close()
+
+            # Korean screens + old data moved forward
+            page, errors = open_page(browser, 'fresh&lang=ko', 390, 844)
+            rules_on(page)
+            cast(page, spell='truth', duration=5, target='user', more=mine)
+            cast(page, form='b:fox', duration=0)
+            check(page.is_visible('.mage-hint.mage-warn'), 'no-end magic I did not cast warns that it can never end')
+            check(page.inner_text('.mage-tab.on').startswith('걸기'), '...and is not cast')
+            page.screenshot(path=os.path.join(SHOTS, 'rules_cast_ko.png'))
+            page.click('[data-mage-view="status"]')
+            page.screenshot(path=os.path.join(SHOTS, 'rules_status_ko.png'))
+            page.click('.mage-head [data-mage-gear]')
+            page.screenshot(path=os.path.join(SHOTS, 'rules_gear_ko.png'), full_page=False)
+            page.evaluate("document.querySelector('#mage_win .mage-body').scrollTop = 400")
+            page.screenshot(path=os.path.join(SHOTS, 'rules_gear_ko2.png'))
+            for sk in ['tome', 'cursed']:
+                page.select_option('.mage-prefs-win [data-mage-p="skin"]', sk)
+                page.click('.mage-foot [data-mage-gear]')
+                page.click('[data-mage-view="cast"]')
+                page.screenshot(path=os.path.join(SHOTS, f'rules_{sk}.png'))
+                page.click('.mage-head [data-mage-gear]')
+            check(not errors, f'no errors ({errors[:3]})')
+            page.close()
+
+            page, errors = open_page(browser, 'fresh')
+            page.evaluate("""(() => { const c = window.__fakeST.ctx; c.extensionSettings.mage = { format: 1, chats: { [c.getCurrentChatId()]: { effects: [
+                { id: 'e1', spell: 'mite', target: { kind: 'user' }, duration: 0, source: { kind: 'object', name: 'a ring' }, release: { kind: 'dispel' }, anchor: { i: 0, key: null }, deliveries: {} }
+              ], actions: [] } }, book: [{ id: 'c1', name: 'Old', spec: { spell: 'polymorph', form: { id: 'cat' }, duration: 0, source: { kind: 'place' }, release: { kind: 'dispel' } } }], bookSeeded: true }; c.saveSettingsDebounced(); })()""")
+            page.goto(f'{BASE}?old'); page.wait_for_function('window.__mageLoaded === true')
+            m = page.evaluate('window.__fakeST.ctx.extensionSettings.mage')
+            st = list(m['chats'].values())[0]
+            check(m['format'] == 2 and st['effects'][0]['release']['kind'] == 'time', 'old data: someone else\'s "Dispel" ending becomes "turns run out"')
+            check(m['book'][0]['spec']['release']['kind'] == 'truth', 'old card that could never end now ends by telling the truth')
             check(not errors, f'no errors ({errors[:3]})')
             page.close()
 

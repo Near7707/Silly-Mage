@@ -113,6 +113,26 @@ const EN = {
     set_backup: 'Backup', set_export: 'Export', set_import: 'Import', imported: 'Backup loaded.', import_fail: 'That file is not a Mage backup.',
     import_q: 'Replace all Mage data (effects, Spellbook, settings) with this backup?',
     version: 'Version {v}', settings: 'Settings', back: 'Back',
+    // magic rules (2-A)
+    rel_time: 'When the turns run out', rel_time_never: 'Does not end on its own (only ⋯ Force clear)',
+    no_dispel_note: 'You did not cast this, so you cannot dispel it.',
+    need_end: 'Magic you did not cast, with no end, needs a way to end: pick turns, or set "How it ends" under More.',
+    dur_none_warn: 'No way to end it: set "How it ends" under More.',
+    nothing_dispel_mine: 'Nothing on {name} that you cast.',
+    more_menu: 'More', force_clear: 'Force clear (never happened)',
+    force_q: 'Clear "{title}" on {name} as if it never happened? The AI will not be told it ended.', forced: 'Cleared.',
+    mana_t: 'Mana {n}/{max} (+1 each turn)', reload: 'Reload', reload_t: 'Reload: fill mana and reset cooldowns',
+    reload_wait: 'Reload comes back in {n} turns.', reloaded: 'Mana full, cooldowns reset.',
+    reload_q: 'Fill your mana and reset every cooldown? (Once per chat, then again every 20 turns.)',
+    load_bar: 'Loadout {n}/{max}', load_change: 'Change loadout', load_edit_t: 'Loadout: pick up to {max}',
+    load_hint: 'Spells you add now rest 3 turns before you can cast them.', load_saved: 'Loadout saved.',
+    load_empty: 'Pick at least one spell.', load_full: 'The loadout holds {max} spells.',
+    cd_n: 'in {n}', block_mana: 'Mana {n} short', block_cd: 'Ready in {n} turns', block_loadout: 'Not in loadout',
+    free_note: 'Not cast by you: it costs nothing, but you cannot dispel it.',
+    set_rules_sub: 'Magic rules', set_rules: 'Magic rules (Mana · Cooldown · Loadout)',
+    set_rules_hint: 'Off: cast freely, as before. On: spells you cast yourself cost mana and rest a few turns.',
+    set_max_mana: 'Max mana', set_loadout_size: 'Loadout size',
+    set_strict: 'Curses end only the set way', set_strict_hint: 'Magic you did not cast stays on even if the story says it broke.',
 };
 
 const KO = {
@@ -216,6 +236,26 @@ const KO = {
     set_backup: '백업', set_export: '내보내기', set_import: '가져오기', imported: '백업을 불러왔어요.', import_fail: 'Mage 백업 파일이 아니에요.',
     import_q: 'Mage의 모든 데이터(걸린 효과, Spellbook, 설정)를 이 백업으로 바꿀까요?',
     version: '버전 {v}', settings: '설정', back: '돌아가기',
+    // magic rules (2-A)
+    rel_time: '남은 턴', rel_time_never: '저절로 안 풀림 (⋯ 강제로 지우기만)',
+    no_dispel_note: '내가 건 주문이 아니라서 Dispel할 수 없어요.',
+    need_end: '내가 걸지 않은 무기한 마법은 끝낼 방법이 필요해요. 턴을 고르거나 "자세히"에서 풀리는 법을 정해 주세요.',
+    dur_none_warn: '끝낼 방법이 없어요. "자세히"에서 풀리는 법을 정해 주세요.',
+    nothing_dispel_mine: '{name}에게 내가 건 효과가 없어요.',
+    more_menu: '더 보기', force_clear: '강제로 지우기 (없던 일)',
+    force_q: '{name}의 "{title}"을(를) 없던 일로 지울까요? AI에게 풀렸다고 알리지 않아요.', forced: '지웠어요.',
+    mana_t: '마나 {n}/{max} (턴마다 +1)', reload: 'Reload', reload_t: 'Reload: 마나 가득 + 쿨다운 초기화',
+    reload_wait: 'Reload는 {n}턴 뒤에 다시 생겨요.', reloaded: '마나를 채우고 쿨다운을 초기화했어요.',
+    reload_q: '마나를 가득 채우고 쿨다운을 초기화할까요? (채팅마다 1번, 20턴마다 다시 생겨요)',
+    load_bar: '들고 온 주문 {n}/{max}', load_change: 'Loadout 바꾸기', load_edit_t: 'Loadout: 최대 {max}개',
+    load_hint: '새로 넣은 주문은 3턴 쉰 뒤에 쓸 수 있어요.', load_saved: 'Loadout을 저장했어요.',
+    load_empty: '주문을 하나 이상 골라 주세요.', load_full: 'Loadout에는 {max}개까지 넣을 수 있어요.',
+    cd_n: '{n}턴 뒤', block_mana: '마나 {n} 부족', block_cd: '{n}턴 뒤', block_loadout: 'Loadout에 없음',
+    free_note: '내가 건 게 아니라 마나는 안 들지만, Dispel할 수 없어요.',
+    set_rules_sub: '마법 규칙', set_rules: '마법 규칙 (마나·쿨다운·Loadout)',
+    set_rules_hint: '끄면 지금처럼 자유롭게. 켜면 내가 건 주문에 마나가 들고 몇 턴 쉬어요.',
+    set_max_mana: '최대 마나', set_loadout_size: 'Loadout 개수',
+    set_strict: '저주는 정해진 방법으로만 풀림', set_strict_hint: '내가 걸지 않은 마법은 글로 "풀렸다"고 써도 안 풀리게 AI에게 알려요.',
 };
 
 const TABLES = { en: EN, ko: KO };
