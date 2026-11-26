@@ -2,6 +2,7 @@
 // (Status / Cast / Spellbook) and the panel in SillyTavern's extension settings.
 
 import { t, lang, josa } from './i18n.js';
+import { conditionsOf, suggestions, isChecking, closeSuggestion } from './judge.js';
 import { ctx, settings, save, currentChatId, uid, fixRelease } from './store.js';
 import {
     SIMPLE, FAMILIES, SPELLS, SPELL_ORDER, FORMS, formById, STAGES, STAGE_MAX, SOURCES, MOTIVES, TRIGGERS, RELEASES,
@@ -36,6 +37,7 @@ const ui = {
     vars: {},
     loadEdit: null,     // spells being picked in the loadout editor, or null
     moreOpen: null,     // card whose ⋯ menu is open
+    sugOpen: false,     // AI suggestions box above the status bar
 };
 
 let barEl = null;
@@ -158,25 +160,14 @@ function chipText(v) {
 
 /** Buttons I press when something happened in the story. */
 function condButtons(v) {
-    if (v.status === 'ended') return [];
-    const e = v.e;
-    const out = [];
-    if (v.status === 'pending' && e.trigger?.kind === 'condition' && e.method !== 'stacked') {
-        out.push({ what: 'trigger', label: e.trigger.text || t('cond') });
-    }
-    if (v.status === 'active') {
-        if (e.method === 'stacked' && v.stage < STAGE_MAX) out.push({ what: 'stack', label: e.trigger?.text || t('cond') });
-        const br = SIMPLE[e.spell]?.breaker;
-        if (br) out.push({ what: 'release', via: 'breaker', label: br.label[lang()] });
-        if (e.release?.kind === 'truth') out.push({ what: 'release', label: t('btn_truth') });
-        if (e.release?.kind === 'action') out.push({ what: 'release', label: e.release.text || t('rel_action') });
-    }
-    return out;
+    return conditionsOf(v).map(({ what, via, label }) => ({ what, via, label }));
 }
 
-function condBtnHtml(v, b, cls = 'mage-cond', who = false) {
-    return `<button type="button" class="${cls}" data-mage-judge="${esc(v.e.id)}" data-what="${b.what}" data-via="${b.via || ''}" title="${esc(t(`judge_${b.what}`))}">`
-        + (who ? ini(v.e.target) : '') + `<span class="mage-ell">${esc(b.label)}</span></button>`;
+function condBtnHtml(v, b, cls = 'mage-cond', who = false, sug = null) {
+    // A condition the AI thinks happened carries a "?" and opens the suggestions instead.
+    const mark = sug ? ` data-mage-sugopen="1" title="${esc(t('sug_has'))}"` : ` title="${esc(t(`judge_${b.what}`))}"`;
+    return `<button type="button" class="${cls}${sug ? ' mage-sugd' : ''}" data-mage-judge="${esc(v.e.id)}" data-what="${b.what}" data-via="${b.via || ''}"${mark}>`
+        + (who ? ini(v.e.target) : '') + `<span class="mage-ell">${esc(b.label)}</span>${sug ? '<span class="mage-q" aria-hidden="true">?</span>' : ''}</button>`;
 }
 
 // ---------- status bar ----------
@@ -196,6 +187,14 @@ export function mountBar() {
 }
 
 function onBarClick(e) {
+    const q = (sel) => e.target.closest(sel);
+    let el;
+    if (q('[data-mage-sugopen]')) { ui.sugOpen = !ui.sugOpen; return refresh(); }
+    if (q('[data-mage-sug-close]')) { ui.sugOpen = false; return refresh(); }
+    if ((el = q('[data-mage-sug-apply]'))) return sugApply(el.dataset.mageSugApply);
+    if ((el = q('[data-mage-sug-dispel]'))) return sugDispel(el.dataset.mageSugDispel);
+    if ((el = q('[data-mage-sug-done]'))) { closeSuggestion(el.dataset.mageSugDone); return changed(); }
+    if (q('.mage-sug')) return; // a click inside the box (not on a button) does nothing
     const j = e.target.closest('[data-mage-judge]');
     if (j) return doJudge(j.dataset.mageJudge, j.dataset.what, j.dataset.via);
     if (e.target.closest('[data-mage-undo]')) return doUndo();
@@ -214,7 +213,10 @@ function renderBar(list) {
     const s = settings();
     barEl.className = `mage-bar mage-root mage-skin-${s.skin}`;
     const rs = s.enabled && currentChatId() && s.rules ? rulesState() : null;
-    if (!s.enabled || !currentChatId() || (!list.length && !rs)) { barEl.hidden = true; barEl.innerHTML = ''; return; }
+    if (!s.enabled || !currentChatId() || (!list.length && !rs)) { barEl.hidden = true; barEl.innerHTML = ''; ui.sugOpen = false; return; }
+    const sugs = suggestions();
+    if (!sugs.length) ui.sugOpen = false;
+    const sugFor = (v, b) => sugs.find(x => x.kind === 'cond' && x.effectId === v.e.id && x.what === b.what && (x.via || '') === (b.via || ''));
     const barSkin = s.skin === 'tome' ? 'theme' : s.skin; // the bar keeps the chat readable; old-book paper only in the window
     const barMode = colorMode(barSkin, syncTheme(barEl, barSkin));
     // One spell cast on two people at once shows as one chip with both pictures, while both
@@ -233,7 +235,7 @@ function renderBar(list) {
             + who + `<span class="mage-ell">${esc(chipText(v))}</span></button>`;
     };
     // In a shared chip, each person's condition button carries a small picture, so it's clear who it judges.
-    const conds = (u) => u.map(v => condButtons(v).map(b => condBtnHtml(v, b, 'mage-cond', u.length > 1)).join('')).join('');
+    const conds = (u) => u.map(v => condButtons(v).map(b => condBtnHtml(v, b, 'mage-cond', u.length > 1, sugFor(v, b))).join('')).join('');
     // Each chip is followed by its own condition buttons, so the one to press sits next to it.
     const shownHtml = units.slice(0, 2).map(u => chip(u) + conds(u)).join('');
     const rest = units.slice(2).flat().length;
@@ -245,9 +247,71 @@ function renderBar(list) {
         ruleBtns = `<span class="mage-mana" style="--mage-fam:${blue}" title="${esc(t('mana_t', { n: rs.mana, max: rs.max }))}">◆ ${rs.mana}/${rs.max}</span>`
             + `<button type="button" class="mage-mini mage-reload${rs.reloadReady ? '' : ' mage-off'}" data-mage-reload style="--mage-fam:${blue}" title="${esc(rs.reloadReady ? t('reload_t') : t('reload_wait', { n: rs.reloadIn }))}" aria-label="${esc(t('reload'))}">↻</button>`;
     }
-    barEl.innerHTML = `<div class="mage-bar-row">${shownHtml}${more}</div>${ruleBtns}${undoBtn}`
-        + `<button type="button" class="mage-mini" data-mage-open="" title="${esc(t('open_status'))}" aria-label="${esc(t('open_status'))}">⌃</button>`;
+    const blue = famColor(FAMILIES.ward.color, barMode);
+    let judgeBits = '';
+    // Kept short so the bar still fits one line on a phone: a spinner, or ✦ and a count.
+    if (isChecking()) judgeBits += `<span class="mage-checking" style="--mage-fam:${blue}" title="${esc(t('checking_t'))}" role="status" aria-label="${esc(t('checking'))}"><span class="mage-spin" aria-hidden="true"></span></span>`;
+    if (sugs.length) judgeBits += `<button type="button" class="mage-sugpill${ui.sugOpen ? ' on' : ''}" data-mage-sugopen="1" style="--mage-fam:${blue}" aria-expanded="${ui.sugOpen}" title="${esc(t('sug_pill', { n: sugs.length }))}" aria-label="${esc(t('sug_pill', { n: sugs.length }))}">${SPARK}<span>${sugs.length}</span></button>`;
+    barEl.innerHTML = `<div class="mage-bar-row">${shownHtml}${more}</div>${judgeBits}${ruleBtns}${undoBtn}`
+        + `<button type="button" class="mage-mini" data-mage-open="" title="${esc(t('open_status'))}" aria-label="${esc(t('open_status'))}">⌃</button>`
+        + (ui.sugOpen ? sugBoxHtml(sugs, blue) : '');
+    barEl.style.setProperty('--mage-fam', blue); // AI suggestions use the blue of the ward family
     barEl.hidden = false;
+}
+
+// ---------- AI suggestions (2-B-1) ----------
+
+const SPARK = '<svg class="mage-spark" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3l2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg>';
+
+function sugCard(x) {
+    const e = x.v.e;
+    const name = targetName(e.target);
+    const head = `<div class="mage-sug-tt">${ini(e.target)}<b class="mage-ell">${esc(effectTitle(e))} — ${esc(name)}</b>`
+        + (x.kind === 'claim' && isMine(e) ? `<span class="mage-sug-tag">${esc(t('sug_mine'))}</span>` : '') + '</div>';
+    const why = x.reason ? `<div class="mage-sug-why">${esc(t('sug_reason', { r: x.reason }))}</div>` : '';
+    let body = '';
+    let btns = '';
+    if (x.kind === 'cond') {
+        body = `<div class="mage-sug-txt">${esc(t('sug_cond', { label: x.label, jg: josa(x.label.replace(/[^\p{L}\p{N}]+$/u, ''), '이/가') }))}</div>`;
+        btns = `<button type="button" class="mage-btn mage-small mage-primary" data-mage-sug-apply="${esc(x.id)}"><span class="mage-ell">${esc(t(`sug_apply_${x.what}`))}</span></button>`
+            + `<button type="button" class="mage-btn mage-small" data-mage-sug-done="${esc(x.id)}"><span class="mage-ell">${esc(t('sug_no'))}</span></button>`;
+    } else if (isMine(e)) {
+        const rs = rulesState();
+        const block = rs.on ? blockOf('dispel', 0, true, rs) : null;
+        const tail = !rs.on ? '' : block ? ` · ${blockText(block)}` : ` ◆${costOf('dispel', 0)}`;
+        body = `<div class="mage-sug-txt">${esc(t('sug_claim_mine'))}</div>`;
+        btns = `<button type="button" class="mage-btn mage-small mage-primary" data-mage-sug-dispel="${esc(x.id)}"${block ? ' disabled' : ''}><span class="mage-ell">${esc(spellName('dispel') + tail)}</span></button>`
+            + `<button type="button" class="mage-btn mage-small" data-mage-sug-done="${esc(x.id)}"><span class="mage-ell">${esc(t('sug_keep'))}</span></button>`;
+    } else {
+        const src = sourceLabel(e.source);
+        body = (src ? `<div class="mage-sug-sub">${t('sug_source', { s: src })}</div>` : `<div class="mage-sug-sub">${esc(t('sug_source', { s: t('src_unknown') }))}</div>`)
+            + `<div class="mage-sug-txt">${esc(t('sug_claim_other'))}<br>${esc(t('sug_how', { r: releaseLabel(e) }))}</div>`
+            + (settings().strictRelease ? `<div class="mage-sug-sub">${esc(t('sug_strict'))}</div>` : '');
+        btns = `<button type="button" class="mage-btn mage-small" data-mage-sug-done="${esc(x.id)}"><span class="mage-ell">${esc(t('sug_ok'))}</span></button>`;
+    }
+    return `<div class="mage-sug-card">${head}${body}${why}<div class="mage-sug-btns">${btns}</div></div>`;
+}
+
+function sugBoxHtml(sugs) {
+    const claims = sugs.some(x => x.kind === 'claim') && sugs.every(x => x.kind === 'claim');
+    return `<div class="mage-sug" role="dialog" aria-label="${esc(t('sug_head', { n: sugs.length }))}">`
+        + `<div class="mage-sug-head">${SPARK}<span class="mage-ell">${esc(claims ? `${t('sug_claimed')} · ${sugs.length}` : t('sug_head', { n: sugs.length }))}</span>`
+        + `<button type="button" class="mage-mini mage-sug-x" data-mage-sug-close aria-label="${esc(t('close'))}" title="${esc(t('close'))}">✕</button></div>`
+        + `<div class="mage-sug-list">${sugs.map(sugCard).join('')}</div>`
+        + `<div class="mage-sug-foot">${esc(t('sug_foot'))}</div></div>`;
+}
+
+function sugApply(id) {
+    const x = suggestions().find(s => s.id === id);
+    if (!x) return changed();
+    closeSuggestion(id);
+    doJudge(x.effectId, x.what, x.via || '');
+}
+
+function sugDispel(id) {
+    const x = suggestions().find(s => s.id === id);
+    if (!x) return changed();
+    if (doDispel(x.effectId)) { closeSuggestion(id); changed(); }
 }
 
 // ---------- window ----------
@@ -893,12 +957,13 @@ function doUndo() {
 
 function doDispel(effectId) {
     const v = views().find(x => x.e.id === effectId);
-    if (!v || !isMine(v.e)) return;
+    if (!v || !isMine(v.e)) return false;
     const rule = ruleFor('dispel', 0);
-    if (rule === false) return;
+    if (rule === false) return false;
     dispel([effectId], '', rule); // a dispel is undoable like a judgment
     toast('info', t('toast_dispel', { title: effectTitle(v.e) }));
     changed();
+    return true;
 }
 
 /** With the rules on: null if I may cast for free, { cost } to pay, or false (blocked, already told). */
@@ -1333,6 +1398,7 @@ export function refresh() {
         ui.cause.preview = '';
         ui.loadEdit = null;
         ui.moreOpen = null;
+        ui.sugOpen = false;
         if (ui.editCard === null) ui.draft = null;
     }
     ui.lastStatus = new Map(all.map(v => [v.e.id, v.status]));

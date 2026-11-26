@@ -63,12 +63,25 @@ Off by default — cast freely, as before. Turn on **Magic rules** in the settin
 
 Mana, cooldowns and Reload are worked out from the chat as it is, so deleting or re-rolling messages winds them back too.
 
+### AI judging
+
+After each AI reply, Mage sends one small side request asking whether a condition happened in the newest part of the story (told the truth, woken up, the curse condition…). It only asks while there is something to judge — no conditions, no request.
+
+- **Suggest** (default): the condition button gets a **?** and a **✦ n** button appears on the status bar. Tap it to see the AI's reason, then **Apply** or **No**.
+- **Auto**: applied at once, with a short notice; **↶** takes it back.
+- **Off**: you press the buttons yourself, as before.
+
+It also notices when the story *says* a spell broke. For a spell you cast, it offers **Dispel**. For anyone else's, it tells you it holds — it only ends the set way.
+
+Suggestions belong to the reply they were made for: re-roll or delete that reply and they are gone.
+
 ### Settings
 
 - **Look**: Default (follows your theme), Old tome, or Cursed book. Every look has the same buttons in the same places.
 - **Magic in this world**: Common (people shrug it off), Rare (people are surprised), or None (it's just strange).
 - **Connection profile** used for 🎲 Cause and "Fill in". If you leave it empty, your current API is used.
 - **Magic rules**, max mana, loadout size, and **Curses end only the set way**.
+- **AI judging**: mode (Off / Suggest / Auto), **Tell me when the story says a spell broke**, the connection profile for checks (same as 🎲 Cause by default), and how many recent messages it reads (4).
 - Language (English / 한국어), the random-form pool, a window-position reset, and backup export/import.
 
 What the AI receives is always short English text (1–2 lines per effect). The AI still replies in whatever language you normally use. At most 4 effects can be active at once.
@@ -84,7 +97,8 @@ https://github.com/Near7707/Silly-Mage
 ## Known limits
 
 - The AI can still sometimes ignore or over-explain an effect. The note is kept short and clear to make this less likely.
-- Conditions are judged by your button press. AI-suggested judging, secret conditions, characters casting spells, and the other spell families come in later stages.
+- AI judging can be wrong, which is why Suggest asks you first. Each check is one extra small request.
+- Secret conditions, characters casting spells, and the other spell families come in later stages.
 
 ## Trying it without SillyTavern
 

@@ -7,7 +7,7 @@ import { FORMS } from './spells.js';
 import { getProfiles } from './ai.js';
 import { resetPos } from './win.js';
 
-export const VERSION = '0.3.0';
+export const VERSION = '0.4.0';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const toast = (kind, msg) => { try { globalThis.toastr?.[kind]?.(msg, 'Mage'); } catch { /* ignore */ } };
@@ -20,11 +20,13 @@ function optionList(pairs, cur) {
     return pairs.map(([v, l]) => `<option value="${esc(v)}"${String(v) === String(cur) ? ' selected' : ''}>${esc(l)}</option>`).join('');
 }
 
-export function profileOptions() {
+export function profileOptions(judge = false) {
     const s = settings();
     const profiles = getProfiles();
-    let h = optionList([['', t('set_profile_current')], ...profiles.map(p => [p.id, p.name])], s.profileId);
-    if (s.profileId && !profiles.some(p => p.id === s.profileId)) h += `<option value="${esc(s.profileId)}" selected>${esc(t('set_profile_missing'))}</option>`;
+    const cur = judge ? s.judgeProfile : s.profileId;
+    const first = judge ? [['same', t('set_judge_same')]] : [];
+    let h = optionList([...first, ['', t('set_profile_current')], ...profiles.map(p => [p.id, p.name])], cur);
+    if (cur && cur !== 'same' && !profiles.some(p => p.id === cur)) h += `<option value="${esc(cur)}" selected>${esc(t('set_profile_missing'))}</option>`;
     return h;
 }
 
@@ -57,6 +59,13 @@ export function prefsHtml(win) {
         + field(t('set_max_mana'), num('maxMana', s.maxMana, 1, 30))
         + field(t('set_loadout_size'), num('loadoutSize', s.loadoutSize, 1, 13))
         + check('strict', s.strictRelease, t('set_strict')) + hint(t('set_strict_hint'))
+        + sub(t('set_judge_sub'))
+        + field(t('set_judge_mode'), sel('judgeMode', ['off', 'suggest', 'auto'].map(k => [k, t(`judge_${k}`)]), s.judgeMode))
+        + hint(t('set_judge_hint'))
+        + check('judgeUnbind', s.judgeUnbind, t('set_judge_unbind')) + hint(t('set_judge_unbind_hint'))
+        + field(t('set_judge_profile'), sel('judgeProfile', [], '').replace('</select>', `${profileOptions(true)}</select>`))
+        + field(t('set_judge_count'), num('judgeCount', s.judgeCount, 2, 20))
+        + hint(t('set_judge_cost'))
         + sub(t('set_pool')) + `<div class="mage-pool">${pool}</div>` + hint(t('set_pool_hint'))
         + sub(t('set_ai'))
         + field(t('set_profile'), sel('profile', [], '').replace('</select>', `${profileOptions()}</select>`))
@@ -119,6 +128,10 @@ export function prefsChange(e) {
         case 'maxMana': s.maxMana = Math.min(30, Math.max(1, Math.round(Number(el.value) || 10))); el.value = s.maxMana; save(); hooks.redrawAll(); break;
         case 'loadoutSize': s.loadoutSize = Math.min(13, Math.max(1, Math.round(Number(el.value) || 6))); el.value = s.loadoutSize; save(); hooks.redrawAll(); break;
         case 'profile': s.profileId = el.value; save(); break;
+        case 'judgeMode': s.judgeMode = ['off', 'suggest', 'auto'].includes(el.value) ? el.value : 'suggest'; save(); hooks.redrawAll(); break;
+        case 'judgeUnbind': s.judgeUnbind = el.checked; save(); hooks.redrawAll(); break;
+        case 'judgeProfile': s.judgeProfile = el.value; save(); hooks.redrawAll(); break;
+        case 'judgeCount': s.judgeCount = Math.min(20, Math.max(2, Math.round(Number(el.value) || 4))); el.value = s.judgeCount; save(); hooks.redrawAll(); break;
         case 'preset': s.sendPreset = el.checked; save(); break;
         case 'reasoning': s.reasoning = el.value; save(); break;
         case 'context': s.contextCount = Math.min(20, Math.max(0, Math.round(Number(el.value) || 0))); el.value = s.contextCount; save(); break;
@@ -149,10 +162,10 @@ async function importFile(el) {
 
 /** Profiles may be added after the fields were drawn. */
 export function prefsFocus(e) {
-    const sel = e.target.closest?.('[data-mage-p="profile"]');
+    const sel = e.target.closest?.('[data-mage-p="profile"], [data-mage-p="judgeProfile"]');
     if (sel) {
         const v = sel.value;
-        sel.innerHTML = profileOptions();
+        sel.innerHTML = profileOptions(sel.dataset.mageP === 'judgeProfile');
         sel.value = v;
     }
 }

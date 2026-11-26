@@ -133,6 +133,24 @@ const EN = {
     set_rules_hint: 'Off: cast freely, as before. On: spells you cast yourself cost mana and rest a few turns.',
     set_max_mana: 'Max mana', set_loadout_size: 'Loadout size',
     set_strict: 'Curses end only the set way', set_strict_hint: 'Magic you did not cast stays on even if the story says it broke.',
+    // AI judging (2-B-1)
+    set_judge_sub: 'AI judging', set_judge_mode: 'Judging mode', judge_off: 'Off', judge_suggest: 'Suggest', judge_auto: 'Auto',
+    set_judge_hint: 'Suggest: the AI picks, you confirm. Auto: applied at once; ↶ takes it back.',
+    set_judge_unbind: 'Tell me when the story says a spell broke',
+    set_judge_unbind_hint: 'Your own spells: offers Dispel. Anyone else\'s: tells you it holds.',
+    set_judge_profile: 'Connection profile for checks', set_judge_same: 'Same as 🎲 Cause',
+    set_judge_count: 'Recent messages the check reads',
+    set_judge_cost: 'One small request after each AI reply, only while there is something to judge. Nothing to judge, no request.',
+    judge_fail: 'AI judging could not reach the AI. Check the connection profile in Mage settings.',
+    judge_auto_one: 'Auto judgment — {what}. ↶ takes it back.', judge_auto_n: 'Auto judgment — {n} conditions met. ↶ takes them back.',
+    checking: 'Checking…', checking_t: 'The AI is checking the conditions',
+    sug_pill: 'Suggestions {n}', sug_has: 'AI suggestion — tap to see', sug_head: 'AI suggestions · {n}',
+    sug_cond: 'The condition "{label}" seems to have happened.', sug_reason: 'Why: {r}',
+    sug_apply_trigger: 'Apply — fire it', sug_apply_release: 'Apply — break it', sug_apply_stack: 'Apply — next stage', sug_no: 'No',
+    sug_claimed: 'The story says it broke', sug_mine: 'Cast by you', sug_claim_mine: 'End the effect too?', sug_keep: 'Keep it',
+    sug_claim_other: 'Not the set way, so it does not break.', sug_how: 'Ends: {r}', sug_source: 'Cast by: {s}',
+    sug_strict: 'The AI is already told it wavers, then comes back.', sug_ok: 'Got it',
+    sug_foot: 'Re-rolling or deleting this reply removes these suggestions.',
 };
 
 const KO = {
@@ -256,6 +274,24 @@ const KO = {
     set_rules_hint: '끄면 지금처럼 자유롭게. 켜면 내가 건 주문에 마나가 들고 몇 턴 쉬어요.',
     set_max_mana: '최대 마나', set_loadout_size: 'Loadout 개수',
     set_strict: '저주는 정해진 방법으로만 풀림', set_strict_hint: '내가 걸지 않은 마법은 글로 "풀렸다"고 써도 안 풀리게 AI에게 알려요.',
+    // AI 판정 (2-B-1)
+    set_judge_sub: 'AI 판정', set_judge_mode: '판정 모드', judge_off: '끄기', judge_suggest: '제안', judge_auto: '자동',
+    set_judge_hint: '제안: AI가 고르면 내가 확인해요. 자동: 바로 적용하고 ↶로 되돌릴 수 있어요.',
+    set_judge_unbind: '글로 "풀렸다"고 하면 알려 주기',
+    set_judge_unbind_hint: '내가 건 주문은 Dispel을 제안하고, 남이 건 주문은 안 풀린다고 알려 줘요.',
+    set_judge_profile: '점검에 쓸 연결 프로필', set_judge_same: '🎲 원인과 같은 프로필',
+    set_judge_count: '점검이 읽을 최근 메시지 수',
+    set_judge_cost: '판정할 게 있을 때만, AI 답변이 끝날 때마다 한 번 물어봐요. 없으면 요청도 없어요.',
+    judge_fail: 'AI 판정 요청이 실패했어요. Mage 설정의 연결 프로필을 확인해 주세요.',
+    judge_auto_one: '자동 판정 — {what}. ↶로 되돌릴 수 있어요.', judge_auto_n: '자동 판정 — 조건 {n}개. ↶로 되돌릴 수 있어요.',
+    checking: '점검 중…', checking_t: 'AI가 조건을 점검하고 있어요',
+    sug_pill: '제안 {n}', sug_has: 'AI 제안 — 눌러서 보기', sug_head: 'AI 제안 · {n}개',
+    sug_cond: '조건 "{label}"{jg} 이뤄진 것 같아요.', sug_reason: '근거: {r}',
+    sug_apply_trigger: '적용 — 발동', sug_apply_release: '적용 — 풀기', sug_apply_stack: '적용 — 다음 단계', sug_no: '아니에요',
+    sug_claimed: '글에서 "풀렸다"고 했어요', sug_mine: '내가 건 주문', sug_claim_mine: '효과도 같이 풀까요?', sug_keep: '그대로 두기',
+    sug_claim_other: '정해진 방법이 아니라서 안 풀려요.', sug_how: '풀리는 법: {r}', sug_source: '건 쪽: {s}',
+    sug_strict: 'AI에게는 이미 "흔들리다 다시 돌아온다"는 줄이 가고 있어요.', sug_ok: '알겠어요',
+    sug_foot: '이 답변을 다시 뽑거나 지우면 제안도 사라져요.',
 };
 
 const TABLES = { en: EN, ko: KO };

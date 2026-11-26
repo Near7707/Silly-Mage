@@ -39,6 +39,7 @@
     async function fakeAI(sys, user) {
         await new Promise(r => setTimeout(r, 300));
         const ko = /Korean/.test(user);
+        if (/referee for a magic tracker/.test(sys)) { window.__judgeCalls = (window.__judgeCalls || 0) + 1; window.__judgeLast = user; return window.__judgeAnswer ?? 'C1: NO'; }
         if (/CAN:/.test(sys)) return ko ? 'CAN: 헤엄치기, 미끄러지기\nCANNOT: 날기, 빨리 걷기' : 'CAN: swim fast, slide on ice\nCANNOT: fly, walk quickly';
         return ko ? '<think>hmm</think>아까 도서관에서 펼친 낡은 책에 변이 마법이 걸려 있었다.' : '<think>hmm</think>The dusty book opened in the library earlier held a hidden spell.';
     }

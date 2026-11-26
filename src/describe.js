@@ -61,7 +61,7 @@ const SPELL_EN = {
     polymorph: 'Polymorph', titan: 'Titan', mite: 'Mite', dispel: 'Dispel', levitate: 'Levitate', truth: 'Truth',
     reverse: 'Reverse', charm: 'Charm', fear: 'Fear', sleep: 'Sleep', glamour: 'Glamour', invisibility: 'Invisibility', luck: 'Luck',
 };
-const nameEn = (e) => (e.spell === 'luck' && e.variant === 'bad' ? 'Jinx' : SPELL_EN[e.spell] || e.spell);
+export const nameEn = (e) => (e.spell === 'luck' && e.variant === 'bad' ? 'Jinx' : SPELL_EN[e.spell] || e.spell);
 const fillWho = (str, who, e) => fillX(String(str).replaceAll('{who}', who), e);
 
 function sourceEn(src) {

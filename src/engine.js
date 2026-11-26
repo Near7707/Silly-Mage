@@ -215,8 +215,11 @@ function addAction(a) {
 }
 
 /** A condition button. `what` = 'stack' | 'release' | 'trigger'. */
-export function judge(effectId, what, via = '') {
-    return addAction({ type: 'judge', effectId, what, via, at: lastRef(), delivered: null });
+export function judge(effectId, what, via = '', { batch = null, auto = false } = {}) {
+    const a = { type: 'judge', effectId, what, via, at: lastRef(), delivered: null };
+    if (batch) a.batch = batch;
+    if (auto) a.auto = true;
+    return addAction(a);
 }
 
 export function dispel(effectIds, by = '', rule = null) {
@@ -249,8 +252,8 @@ export function undo() {
     const st = chatState();
     const a = undoable();
     if (!st || !a) return null;
-    // Dispels pressed together (one family) go back together.
-    st.actions = st.actions.filter(x => x.id !== a.id && !(a.batch && x.batch === a.batch && x.type === 'dispel'));
+    // Things done together (a family Dispel, several auto judgments) go back together.
+    st.actions = st.actions.filter(x => x.id !== a.id && !(a.batch && x.batch === a.batch && x.type === a.type));
     st.undoId = null;
     save();
     return a;

@@ -93,6 +93,58 @@
 .mage-reload { color: var(--mage-fam); border-color: var(--mage-fam); }
 .mage-reload.mage-off { opacity: .4; border-style: dashed; }
 
+/* AI judging (2-B-1): "?" on a condition the AI thinks happened, the suggestions pill and box */
+.mage-bar { position: relative; }
+.mage-cond.mage-sugd { position: relative; overflow: visible; border-style: solid; border-color: var(--mage-fam, var(--mage-accent)); }
+.mage-q {
+    position: absolute; top: -6px; right: -6px; width: 16px; height: 16px; border-radius: 50%;
+    display: inline-flex; align-items: center; justify-content: center;
+    background: var(--mage-fam, var(--mage-accent)); color: var(--mage-bg); font-size: 11px; font-weight: 800; line-height: 1;
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--mage-fam, var(--mage-accent)) 30%, transparent);
+    animation: mage-pulse 1.6s ease-in-out infinite;
+}
+@keyframes mage-pulse { 50% { transform: scale(1.15); } }
+@media (prefers-reduced-motion: reduce) { .mage-q, .mage-spin { animation: none; } }
+.mage-bar-row:has(.mage-sugd) { padding-top: 6px; margin-top: -6px; padding-right: 6px; }
+.mage-sugpill, .mage-checking {
+    flex: 0 0 auto; display: inline-flex; align-items: center; gap: 4px;
+    height: 30px; padding: 0 9px; border-radius: 15px; white-space: nowrap;
+    border: 1px solid var(--mage-fam); color: var(--mage-fam); background: var(--mage-surface); font-size: 12.5px; font-weight: 700;
+}
+.mage-sugpill { cursor: pointer; }
+.mage-sugpill.on { background: var(--mage-fam); color: var(--mage-bg); }
+.mage-sugpill .mage-spark, .mage-sug-head .mage-spark { flex: 0 0 auto; }
+.mage-checking { border-style: dashed; color: var(--mage-muted); font-weight: 400; padding: 0 8px; }
+.mage-spin {
+    flex: 0 0 auto; width: 11px; height: 11px; border-radius: 50%;
+    border: 2px solid var(--mage-fam); border-right-color: transparent; animation: mage-rot .9s linear infinite;
+}
+@keyframes mage-rot { to { transform: rotate(360deg); } }
+.mage-sug {
+    position: absolute; left: 0; right: 0; bottom: calc(100% + 6px); z-index: 40;
+    display: flex; flex-direction: column; max-height: min(60vh, 460px);
+    background: var(--mage-bg); border: 1px solid var(--mage-fam); border-radius: 12px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, .45); overflow: hidden;
+}
+.mage-sug-head {
+    flex: 0 0 auto; display: flex; align-items: center; gap: 7px; padding: 6px 6px 6px 12px;
+    color: var(--mage-fam); font-size: 13px; font-weight: 700; border-bottom: 1px solid var(--mage-border);
+}
+.mage-sug-head .mage-ell { flex: 1 1 auto; }
+.mage-sug-x { width: 32px; height: 32px; font-size: 13px; color: var(--mage-text); }
+.mage-sug-list { flex: 1 1 auto; overflow-y: auto; overscroll-behavior: contain; padding: 8px; display: flex; flex-direction: column; gap: 8px; }
+.mage-sug-card { background: var(--mage-surface); border-radius: 10px; padding: 10px; display: flex; flex-direction: column; gap: 6px; }
+.mage-sug-tt { display: flex; align-items: center; gap: 7px; min-width: 0; font-size: 14px; }
+.mage-sug-tt b { flex: 1 1 auto; }
+.mage-sug-tag { flex: 0 0 auto; font-size: 11px; color: var(--mage-fam); white-space: nowrap; }
+.mage-sug-txt { font-size: 13.5px; line-height: 1.45; }
+.mage-sug-sub { font-size: 12px; line-height: 1.45; color: var(--mage-muted); }
+.mage-sug-why { font-size: 12.5px; line-height: 1.45; color: var(--mage-muted); background: var(--mage-surface2); border-radius: 7px; padding: 6px 8px; }
+.mage-sug-btns { display: flex; gap: 6px; }
+.mage-sug-btns .mage-btn { flex: 0 0 auto; max-width: 100%; }
+.mage-sug .mage-sug-btns .mage-btn.mage-primary { flex: 1 1 auto; background: var(--mage-fam); color: var(--mage-bg); }
+.mage-sug-foot { flex: 0 0 auto; padding: 6px 12px 8px; font-size: 11.5px; color: var(--mage-muted); }
+
 /* ---------- floating window ---------- */
 .mage-win {
     position: fixed; left: 0; top: 0; z-index: 9000;

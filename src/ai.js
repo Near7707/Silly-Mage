@@ -7,16 +7,17 @@ export function getProfiles() {
     try { return ctx().extensionSettings?.connectionManager?.profiles || []; } catch { return []; }
 }
 
-async function requestLLM(messages, { maxTokens = 400, signal } = {}) {
+async function requestLLM(messages, { maxTokens = 400, signal, profileId } = {}) {
     const c = ctx();
     const st = settings();
     signal?.throwIfAborted();
     const content = (res) => (typeof res === 'string' ? res : String(res?.content ?? ''));
     const effort = st.reasoning && st.reasoning !== 'default' ? { reasoning_effort: st.reasoning } : {};
-    if (st.profileId) {
+    const profile = profileId ?? st.profileId;
+    if (profile) {
         const svc = c.ConnectionManagerRequestService;
         if (!svc) throw new Error('NO_PROFILE_API');
-        const res = await svc.sendRequest(st.profileId, messages, maxTokens, {
+        const res = await svc.sendRequest(profile, messages, maxTokens, {
             stream: false, signal, extractData: true, includePreset: !!st.sendPreset, includeInstruct: true,
         }, effort);
         return content(res);
@@ -96,4 +97,45 @@ export async function askForm(name, lang, signal) {
     const can = /CAN\s*:\s*(.+)/i.exec(text.replace(/CANNOT\s*:.*/i, ''))?.[1]?.trim() || '';
     const cannot = /CANNOT\s*:\s*(.+)/i.exec(text)?.[1]?.trim() || '';
     return { can, cannot, raw: String(raw || '') };
+}
+
+/**
+ * AI judging: did these conditions happen in the newest part of the story, and does it claim
+ * these effects ended? Returns { C1: { yes, reason }, E1: ... }.
+ */
+export async function askJudge({ conds, claims, lang }, signal) {
+    const st = settings();
+    let chat = [];
+    try { chat = (ctx().chat || []).filter(m => m && !m.is_system); } catch { /* ignore */ }
+    const recent = chat.slice(-Math.max(2, st.judgeCount));
+    // NEW = from my last message to the end (or just the last reply).
+    let from = recent.length - 1;
+    for (let i = recent.length - 1; i >= 0; i--) if (recent[i].is_user) { from = i; break; }
+    const line = (m) => `${m.name || (m.is_user ? 'User' : 'Character')}: ${String(m.mes || '').replace(/\s+/g, ' ').slice(0, 1200)}`;
+    const system = 'You are a careful referee for a magic tracker in a roleplay. '
+        + 'Answer each numbered question about the NEW part of the story only; earlier lines are context. '
+        + 'Say YES only when the NEW part clearly shows it happening, not when it is only hinted, planned or imagined. '
+        + 'Reply with one line per question and nothing else, exactly "<id>: YES - <short reason>" or "<id>: NO".';
+    const parts = [];
+    if (from > 0) parts.push(`Earlier (context):\n${recent.slice(0, from).map(line).join('\n')}`);
+    parts.push(`NEW:\n${recent.slice(from).map(line).join('\n')}`);
+    if (conds.length) parts.push(`Conditions — did this happen in the NEW part?\n${conds.map((c, n) => `C${n + 1}: ${c}`).join('\n')}`);
+    if (claims.length) parts.push(`Magic effects — does the NEW part say or show that this effect ended, broke, wore off or was removed?\n${claims.map((c, n) => `E${n + 1}: ${c}`).join('\n')}`);
+    parts.push(`Write each reason in ${LANG_NAME[lang] || 'English'}, at most 15 words. Keep "YES"/"NO" in English.`);
+    const profileId = st.judgeProfile === 'same' ? st.profileId : st.judgeProfile;
+    const raw = await requestLLM([{ role: 'system', content: system }, { role: 'user', content: parts.join('\n\n') }],
+        { maxTokens: 400, signal, profileId });
+    return parseJudge(cleanAnswer(raw));
+}
+
+export function parseJudge(text) {
+    const out = {};
+    for (const ln of String(text || '').split('\n')) {
+        const m = /^[\s*\-#>]*\**\s*([CE]\d+)\s*\**\s*[:：.)]\s*\**\s*(YES|NO)\b\**\s*[-–—:,.]?\s*(.*)$/i.exec(ln);
+        if (!m) continue;
+        const id = m[1].toUpperCase();
+        if (out[id]) continue;
+        out[id] = { yes: m[2].toUpperCase() === 'YES', reason: m[3].trim().replace(/^["'“”]+|["'“”]+$/g, '').slice(0, 160) };
+    }
+    return out;
 }

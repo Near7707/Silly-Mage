@@ -26,6 +26,11 @@ const DEFAULTS = Object.freeze({
     maxMana: 10,
     loadoutSize: 6,
     strictRelease: true,    // magic I did not cast ends only the set way (an extra line for the AI)
+    // AI judging (stage 2-B-1)
+    judgeMode: 'suggest',   // off | suggest | auto — conditions checked by a small side request after each AI reply
+    judgeUnbind: true,      // also notice when the story claims a spell broke
+    judgeProfile: 'same',   // 'same' = the profile of 🎲 cause, '' = current API, or a profile id
+    judgeCount: 4,          // recent messages the check reads
     // chatId -> { effects, actions, undoId, reloads: [{id,t,at}], loadout: string[]|null, loadAdds: [{spell,t,at}] }
     chats: {},
     // branch chats already copied from their parent: chatId -> parent chatId
@@ -62,6 +67,7 @@ export function migrate(s) {
         if (!Array.isArray(st.reloads)) st.reloads = [];
         if (!Array.isArray(st.loadAdds)) st.loadAdds = [];
         if (!Array.isArray(st.ledger)) st.ledger = [];
+        if (!Array.isArray(st.checks)) st.checks = [];
         if (st.loadout !== null && !Array.isArray(st.loadout)) st.loadout = null;
     }
     if (s.format < 2) {
@@ -75,6 +81,9 @@ export function migrate(s) {
         }
         s.format = 2;
     }
+    if (!['off', 'suggest', 'auto'].includes(s.judgeMode)) s.judgeMode = 'suggest';
+    if (typeof s.judgeProfile !== 'string') s.judgeProfile = 'same';
+    s.judgeCount = Math.min(20, Math.max(2, Math.round(Number(s.judgeCount) || 4)));
     s.contextCount = Math.min(20, Math.max(0, Number(s.contextCount) || 0));
     s.maxMana = Math.min(30, Math.max(1, Math.round(Number(s.maxMana) || 10)));
     s.loadoutSize = Math.min(13, Math.max(1, Math.round(Number(s.loadoutSize) || 6)));
@@ -139,7 +148,7 @@ export function chatState(chatId = currentChatId(), create = false) {
     const s = settings();
     if (!s.chats[chatId]) {
         if (!create) return null;
-        s.chats[chatId] = { effects: [], actions: [], undoId: null, reloads: [], loadout: null, loadAdds: [], ledger: [] };
+        s.chats[chatId] = { effects: [], actions: [], undoId: null, reloads: [], loadout: null, loadAdds: [], ledger: [], checks: [] };
     }
     return s.chats[chatId];
 }

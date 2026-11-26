@@ -8,6 +8,7 @@ import { views, setSent, markDelivered, copyFromParent } from './src/engine.js';
 import { buildPrompt } from './src/describe.js';
 import { MAGE_GLYPH } from './src/icons.js';
 import { VERSION, prefsHtml, prefsClick, prefsChange, prefsFocus, setPrefsHooks } from './src/prefs.js';
+import { maybeCheck, setJudgeHook } from './src/judge.js';
 import { mountBar, refresh, openWindow, closeWindow, isOpen, setOnChange, disableAll, rerenderAll } from './src/ui.js';
 
 export { VERSION };
@@ -50,6 +51,18 @@ function refreshSoon() {
 
 function changedNow() {
     try { refresh(); updatePrompt(); } catch (e) { console.error('[Mage]', e); }
+}
+
+// ---------- AI judging: one small check after each finished AI reply ----------
+
+let generating = false;
+let checkTimer = 0;
+function checkSoon() {
+    clearTimeout(checkTimer);
+    checkTimer = setTimeout(() => {
+        if (generating) return; // the end of this generation schedules it again
+        maybeCheck().catch(e => console.error('[Mage] judge', e));
+    }, 800);
 }
 
 // ---------- settings panel ----------
@@ -124,15 +137,16 @@ function registerEvents() {
         ev.USER_MESSAGE_RENDERED, ev.CHARACTER_MESSAGE_RENDERED, ev.MORE_MESSAGES_LOADED, ev.CHAT_LOADED, ev.MESSAGE_SENT]) {
         on(name, refreshSoon);
     }
-    on(ev.MESSAGE_RECEIVED, (mesId) => { markDelivered(mesId); refreshSoon(); });
+    on(ev.MESSAGE_RECEIVED, (mesId) => { markDelivered(mesId); refreshSoon(); checkSoon(); });
     on(ev.GENERATION_STARTED, (type, _opts, dryRun) => {
-        if (!dryRun) pendingGen = String(type || 'normal');
+        if (!dryRun) { pendingGen = String(type || 'normal'); generating = true; }
         updatePrompt(dryRun ? type : pendingGen, !dryRun);
     });
     // The notes that went out stay waiting for the reply (MESSAGE_RECEIVED); the next generation replaces them.
     for (const name of [ev.GENERATION_ENDED, ev.GENERATION_STOPPED]) {
-        on(name, () => { pendingGen = ''; refreshSoon(); });
+        on(name, () => { pendingGen = ''; generating = false; refreshSoon(); });
     }
+    on(ev.GENERATION_ENDED, checkSoon);
     on(ev.CHAT_RENAMED, (data) => { onChatRenamed(data?.oldFileName, data?.newFileName); changedNow(); });
     on(ev.CHAT_DELETED, (name) => onChatDeleted(name));
     on(ev.GROUP_CHAT_DELETED, (name) => onChatDeleted(name));
@@ -146,6 +160,7 @@ async function init() {
     mountWand();
     mountBar();
     setOnChange(changedNow);
+    setJudgeHook(changedNow);
     setPrefsHooks({
         redrawAll: () => { mountPanel(); mountWand(); rerenderAll(); updatePrompt(); },
         turnedOff: disableAll,
