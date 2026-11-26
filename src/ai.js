@@ -126,6 +126,8 @@ export async function askJudge({ conds, claims, lang, casts = [], spells = '', p
             + `Spells: ${spells}\nPeople: ${people.join(', ')}\n`
             + casts.map((c, n) => `S${n + 1}: ${c}`).join('\n')
             + '\nFor these, answer exactly "<id>: YES - <spell name> - <target\'s name> - <short reason>" or "<id>: NO". '
+            + 'If the character clearly lays the spell to take hold LATER instead (e.g. "you will see when the sun sets"), answer '
+            + '"<id>: LATER - <spell name> - <target\'s name> - <when, a few words> - <about how many replies until then, a number, or ?> - <short reason>". '
             + 'After Polymorph put the animal in brackets, e.g. "Polymorph (cat)"; after Glamour, what they now look like. Use the spell names above in English.');
     }
     parts.push(`Write each reason in ${LANG_NAME[lang] || 'English'}, at most 15 words. Keep "YES"/"NO" in English.`);
@@ -138,11 +140,15 @@ export async function askJudge({ conds, claims, lang, casts = [], spells = '', p
 export function parseJudge(text) {
     const out = {};
     for (const ln of String(text || '').split('\n')) {
-        const m = /^[\s*\-#>]*\**\s*([CES]\d+)\s*\**\s*[:：.)]\s*\**\s*(YES|NO)\b\**\s*[-–—:,.]?\s*(.*)$/i.exec(ln);
+        const m = /^[\s*\-#>]*\**\s*([CES]\d+)\s*\**\s*[:：.)]\s*\**\s*(YES|NO|LATER)\b\**\s*[-–—:,.]?\s*(.*)$/i.exec(ln);
         if (!m) continue;
         const id = m[1].toUpperCase();
         if (out[id]) continue;
-        out[id] = { yes: m[2].toUpperCase() === 'YES', reason: m[3].trim().replace(/^["'“”]+|["'“”]+$/g, '').slice(0, 220) };
+        const word = m[2].toUpperCase();
+        // LATER (0.7.0): only for a character's spell — it was laid to take hold later.
+        const later = word === 'LATER' && id.startsWith('S');
+        if (word === 'LATER' && !later) continue;
+        out[id] = { yes: word !== 'NO', later, reason: m[3].trim().replace(/^["'“”]+|["'“”]+$/g, '').slice(0, 220) };
     }
     return out;
 }

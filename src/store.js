@@ -31,6 +31,11 @@ const DEFAULTS = Object.freeze({
     judgeUnbind: true,      // also notice when the story claims a spell broke
     judgeProfile: 'same',   // 'same' = the profile of 🎲 cause, '' = current API, or a profile id
     judgeCount: 4,          // recent messages the check reads
+    // flair (stage 2-C-2)
+    drama: false,           // misfires and critical hits on spells I cast myself
+    miscastChance: 5,       // %
+    critChance: 10,         // %
+    logCards: true,         // record cards under chat messages (screen only)
     // chatId -> { effects, actions, undoId, reloads: [{id,t,at}], loadout: string[]|null, loadAdds: [{spell,t,at}],
     //            casters: { avatar: { spells, every, duration, dice, chance } }, casterLog }
     chats: {},
@@ -90,7 +95,14 @@ export function migrate(s) {
     s.contextCount = Math.min(20, Math.max(0, Number(s.contextCount) || 0));
     s.maxMana = Math.min(30, Math.max(1, Math.round(Number(s.maxMana) || 10)));
     s.loadoutSize = Math.min(13, Math.max(1, Math.round(Number(s.loadoutSize) || 6)));
+    s.miscastChance = pct(s.miscastChance, 5);
+    s.critChance = pct(s.critChance, 10);
     return s;
+}
+
+export function pct(v, def) {
+    const n = Math.round(Number(v));
+    return Number.isFinite(n) ? Math.min(100, Math.max(0, n)) : def;
 }
 
 /** Magic someone else cast cannot be dispelled by me: its "Dispel" ending becomes "when the turns run out". */

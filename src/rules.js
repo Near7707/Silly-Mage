@@ -10,13 +10,15 @@
 
 import { settings, save, chatState, currentChatId } from './store.js';
 import { SPELLS, SPELL_ORDER } from './spells.js';
-import { chatView, posOf, turnsAfter, lastRef } from './engine.js';
+import { chatView, posOf, turnsAfter, lastRef, counters } from './engine.js';
 
 export const COST = { change: 3, mind: 2, illusion: 2, fate: 2, ward: 2 };
 export const NO_END_EXTRA = 2;
 export const CD_SPELL = 3;
 export const CD_DISPEL = 2;
 export const RELOAD_EVERY = 20;
+export const COUNTER_COST = 3;   // a block with the rules on: mana only, no cooldown
+export const COUNTER_EVERY = 10; // a block with the rules off: once every 10 turns (all blocks share it)
 export const DEFAULT_LOADOUT = ['polymorph', 'truth', 'charm', 'sleep', 'invisibility', 'dispel'];
 
 export const rulesOn = () => !!settings().rules;
@@ -68,7 +70,9 @@ export function rulesState(chatId = currentChatId()) {
     const view = chatView(false);
     const events = [];
     if (st) {
-        for (const e of st.effects) if (e.ruled) events.push({ pos: posOf(view, e.anchor), t: e.created || 0, cost: e.cost || 0, cd: e.spell });
+        // A critical hit (0.7.0) leaves no cooldown behind.
+        for (const e of st.effects) if (e.ruled) events.push({ pos: posOf(view, e.anchor), t: e.created || 0, cost: e.cost || 0, cd: e.noCd ? null : e.spell });
+        for (const a of counters(view, st)) if (a.ruled) events.push({ pos: posOf(view, a.at), t: a.t || 0, cost: a.cost || 0, cd: null });
         for (const a of st.actions) if (a.type === 'dispel' && a.ruled) events.push({ pos: posOf(view, a.at), t: a.t || 0, cost: a.cost || 0, cd: 'dispel' });
         for (const x of st.ledger || []) events.push({ pos: posOf(view, x.at), t: x.t || 0, cost: x.cost || 0, cd: x.spell });
         for (const x of st.loadAdds || []) events.push({ pos: posOf(view, x.at), t: x.t || 0, cost: 0, cd: x.spell, add: true });
@@ -89,6 +93,7 @@ export function rulesState(chatId = currentChatId()) {
             continue;
         }
         mana = Math.max(0, mana - ev.cost);
+        if (!ev.cd || ev.cd === 'counter') continue;
         // A spell just put in the loadout always rests the full spell cooldown, Dispel too.
         cdFrom[ev.cd] = { pos: ev.pos, need: ev.add ? CD_SPELL : (ev.cd === 'dispel' ? CD_DISPEL : CD_SPELL) };
     }
@@ -120,6 +125,20 @@ export function blockOf(spell, duration, mine = true, rs = rulesState()) {
     const cost = costOf(spell, duration);
     if (rs.mana < cost) return { why: 'mana', n: cost - rs.mana };
     return null;
+}
+
+/**
+ * Can I block (Counter) now? null when I can, else { why: 'mana'|'cooldown', n }.
+ * Rules on: 3 mana, no cooldown. Rules off: once every 10 turns.
+ */
+export function counterBlock(rs = rulesState()) {
+    if (rs.on) return rs.mana < COUNTER_COST ? { why: 'mana', n: COUNTER_COST - rs.mana } : null;
+    const view = chatView(false);
+    const list = counters(view);
+    if (!list.length) return null;
+    const last = Math.max(...list.map(a => posOf(view, a.at)));
+    const since = turnsAfter(view, last).length;
+    return since >= COUNTER_EVERY ? null : { why: 'cooldown', n: COUNTER_EVERY - since };
 }
 
 /** Reload: mana full, every cooldown reset. Once per chat, then again every 20 turns. */

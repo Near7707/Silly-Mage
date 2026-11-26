@@ -12,7 +12,7 @@ import { SIMPLE, STAGE_MAX } from './spells.js';
 import { views, chatView, judge, secretRelease, veiled } from './engine.js';
 import { targetName, nameEn, formText, stateText } from './describe.js';
 import { askJudge } from './ai.js';
-import { activeCasters, waitTurns, readSpell, targetFromName, castBlock, castByCharacter, spellListEn, chatMembers } from './casters.js';
+import { activeCasters, waitTurns, readSpell, targetFromName, castBlock, castByCharacter, spellListEn, chatMembers, DELAY_TURNS } from './casters.js';
 
 const KEEP_CHECKS = 8;
 
@@ -159,12 +159,19 @@ function store(chatId, key, conds, claims, casts, answers) {
     casts.forEach((c, n) => {
         const a = answers[`S${n + 1}`];
         if (!a?.yes) return;
-        const [spellPart, targetPart, ...why] = String(a.reason || '').split(/\s+[-–—]\s+/);
+        const [spellPart, targetPart, ...rest] = String(a.reason || '').split(/\s+[-–—]\s+/);
         const sp = readSpell(spellPart);
         if (!sp) return;
         const target = targetFromName(targetPart);
-        items.push({ id: uid('j'), kind: 'cast', avatar: c.avatar, name: c.name, spell: sp.spell, variant: sp.variant,
-            detail: sp.detail, target, reason: why.join(' - ').trim(), state: 'open' });
+        const it = { id: uid('j'), kind: 'cast', avatar: c.avatar, name: c.name, spell: sp.spell, variant: sp.variant,
+            detail: sp.detail, target, reason: rest.join(' - ').trim(), state: 'open' };
+        // A delayed spell (0.7.0): when, and in about how many turns (3 when it cannot be read).
+        if (a.later) {
+            const [when = '', turns = '', ...why] = rest;
+            const n = Math.round(Number(String(turns).replace(/[^\d.]/g, '')));
+            Object.assign(it, { later: true, when: when.trim().slice(0, 60), turns: n >= 1 ? Math.min(50, n) : DELAY_TURNS, reason: why.join(' - ').trim() });
+        }
+        items.push(it);
     });
     st.checks.push({ key, t: Date.now(), items });
     if (st.checks.length > KEEP_CHECKS) st.checks.splice(0, st.checks.length - KEEP_CHECKS);
@@ -247,6 +254,16 @@ export function suggestions(list = views()) {
             const c = it.kind === 'cond' ? conditionsOf(v).find(x => x.what === it.what && (x.via || '') === (it.via || '')) : null;
             return { ...it, v, label: c?.label || '' };
         });
+}
+
+/** A delayed spell's turns, changed on its card (− / +). */
+export function setSuggestionTurns(id, n) {
+    const st = chatState();
+    for (const c of st?.checks || []) {
+        const it = c.items.find(x => x.id === id);
+        if (it) { it.turns = Math.min(50, Math.max(1, Math.round(Number(n) || DELAY_TURNS))); save(); return it; }
+    }
+    return null;
 }
 
 /** Mark a suggestion handled (applied or waved off). */

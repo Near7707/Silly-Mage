@@ -3,14 +3,15 @@
 // to character cards, chat files or chat metadata; everything lives in extension settings.
 
 import { t, setLanguage } from './src/i18n.js';
-import { ctx, settings, uiLang, onChatRenamed, onChatDeleted, currentChatId } from './src/store.js';
-import { views, setSent, markDelivered, copyFromParent, chatView } from './src/engine.js';
+import { ctx, settings, uiLang, onChatRenamed, onChatDeleted, currentChatId, chatState } from './src/store.js';
+import { views, setSent, markDelivered, copyFromParent, chatView, undeliveredCounters } from './src/engine.js';
 import { rollDice, setDice, getDice, castByCharacter } from './src/casters.js';
-import { buildPrompt } from './src/describe.js';
+import { buildPrompt, counterNote } from './src/describe.js';
 import { MAGE_GLYPH } from './src/icons.js';
 import { VERSION, prefsHtml, prefsClick, prefsChange, prefsFocus, setPrefsHooks } from './src/prefs.js';
 import { maybeCheck, setJudgeHook } from './src/judge.js';
 import { mountBar, refresh, openWindow, closeWindow, isOpen, setOnChange, disableAll, rerenderAll } from './src/ui.js';
+import { syncLog, syncMessage, clearLog } from './src/log.js';
 
 export { VERSION };
 const PROMPT_KEY = 'mage_effects';
@@ -32,7 +33,7 @@ function updatePrompt(genType = pendingGen, live = false) {
         const withNotes = !['quiet', 'impersonate'].includes(type);
         // B. The dice: a character may cast this turn (only for a new reply to my message, or a re-roll of it).
         const dice = withNotes && ['normal', 'swipe', 'regenerate'].includes(type) && s.judgeMode !== 'off' ? diceFor(skipLast) : null;
-        const built = buildPrompt(views({ skipLast }), { withNotes, once: dice ? [dice.text] : [] });
+        const built = buildPrompt(views({ skipLast }), { withNotes, once: dice ? [dice.text] : [], blocks: withNotes ? blockNotes(skipLast) : [] });
         text = built.text;
         if (live) setSent(withNotes ? built.notes : []);
         if (live) setDice(dice ? { ...dice, chatId: currentChatId(),
@@ -42,6 +43,17 @@ function updatePrompt(genType = pendingGen, live = false) {
         // 1 = in chat, depth 1 (close to the reply, so it is not forgotten), no world-info scan, system role.
         c.setExtensionPrompt(PROMPT_KEY, text, 1, 1, false, 0);
     } catch (e) { console.error('[Mage] prompt', e); }
+}
+
+/** Spells that bounced off (Counter), told once in the next reply. */
+function blockNotes(skipLast) {
+    const st = chatState();
+    try {
+        return undeliveredCounters({ skipLast }).map(a => ({
+            text: counterNote(a, a.effectId ? st?.effects.find(e => e.id === a.effectId) || null : null),
+            kind: 'counter', actionId: a.id,
+        }));
+    } catch (e) { console.error('[Mage] counter', e); return []; }
 }
 
 let speaker = null; // group chats: the member about to reply (GROUP_MEMBER_DRAFTED)
@@ -67,7 +79,7 @@ function sneakCast(mesId) {
     const list = ctx().chat || [];
     const m = list[Number(mesId)];
     if (!m || m.is_user || m.is_system || Number(mesId) !== list.length - 1) return;
-    castByCharacter({ ...d, sneak: true });
+    castByCharacter({ ...d, sneak: true, sensed: !!d.noticed });
 }
 
 // ---------- refreshing ----------
@@ -77,11 +89,13 @@ function refreshSoon() {
     clearTimeout(timer);
     timer = setTimeout(() => {
         try { refresh(); updatePrompt(); } catch (e) { console.error('[Mage]', e); }
+        syncLog();
     }, 60);
 }
 
 function changedNow() {
     try { refresh(); updatePrompt(); } catch (e) { console.error('[Mage]', e); }
+    syncLog();
 }
 
 // ---------- AI judging: one small check after each finished AI reply ----------
@@ -163,7 +177,11 @@ function registerEvents() {
     const ev = ctx().eventTypes || ctx().event_types;
     const on = (name, fn) => { if (name) eventSource.on(name, (...a) => { try { return fn(...a); } catch (e) { console.error('[Mage]', e); } }); };
 
-    on(ev.CHAT_CHANGED, () => { speaker = null; setDice(null); copyFromParent(); mountBar(); changedNow(); });
+    on(ev.CHAT_CHANGED, () => {
+        speaker = null; setDice(null); copyFromParent(); mountBar(); changedNow();
+        // Record cards: the whole chat is drawn again (once more a little later, in case drawing is still going on).
+        syncLog(true); setTimeout(() => syncLog(true), 400);
+    });
     on(ev.GROUP_MEMBER_DRAFTED, (chId) => {
         try { speaker = ctx().characters?.[Number(chId)]?.avatar || null; } catch { speaker = null; }
     });
@@ -171,6 +189,11 @@ function registerEvents() {
         ev.USER_MESSAGE_RENDERED, ev.CHARACTER_MESSAGE_RENDERED, ev.MORE_MESSAGES_LOADED, ev.CHAT_LOADED, ev.MESSAGE_SENT]) {
         on(name, refreshSoon);
     }
+    // Record cards: a message that was just drawn is looked at alone; a whole chat drawn, all drawn ones.
+    for (const name of [ev.USER_MESSAGE_RENDERED, ev.CHARACTER_MESSAGE_RENDERED, ev.MESSAGE_SWIPED, ev.MESSAGE_UPDATED, ev.MESSAGE_EDITED]) {
+        on(name, (mesId) => syncMessage(mesId));
+    }
+    for (const name of [ev.MORE_MESSAGES_LOADED, ev.CHAT_LOADED]) on(name, () => syncLog(true));
     on(ev.MESSAGE_RECEIVED, (mesId) => { markDelivered(mesId); sneakCast(mesId); refreshSoon(); checkSoon(); });
     on(ev.GENERATION_STARTED, (type, _opts, dryRun) => {
         if (!dryRun) { pendingGen = String(type || 'normal'); generating = true; }
@@ -196,8 +219,8 @@ async function init() {
     setOnChange(changedNow);
     setJudgeHook(changedNow);
     setPrefsHooks({
-        redrawAll: () => { mountPanel(); mountWand(); rerenderAll(); updatePrompt(); },
-        turnedOff: disableAll,
+        redrawAll: () => { mountPanel(); mountWand(); rerenderAll(); updatePrompt(); syncLog(true); },
+        turnedOff: () => { disableAll(); clearLog(); },
     });
     registerEvents();
     changedNow();

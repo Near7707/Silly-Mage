@@ -95,6 +95,14 @@ Both need AI judging to be on.
 - **Who knows → No one knows it is magic**: everyone in the story, the target too, takes it as odd, unexplained happenings.
 - **Send an omen before it fires** (for a spell that waits): one small odd sign goes to the AI, once: 1 turn before a delayed spell fires, or in the next reply for one that waits on a chance or a condition.
 
+### Flair
+
+- **Block**: a character's spell can be blocked instead of applied — on its AI suggestion card, on the card of a spell that just went in on its own (Auto mode), or before a waiting spell fires. Nothing takes hold, and the next reply shows the magic bouncing off. With the magic rules on a block costs 3 mana; otherwise you can block once every 10 turns. **↶** takes a block back.
+- **Something is felt**: when an omen goes out for a spell you did not cast, or a secret cast comes in and you sense it, a dashed **👁 ???** shows on the status bar until the next reply. Tap it to **Block** or **Leave it**. Who and what stay hidden. How likely you sense a secret cast is set per character in the **Casters** tab (**Chance to sense it**, 30% by default, 0 = never).
+- **Delayed spells**: when a character lays a spell to take hold later ("you'll see when the sun sets"), AI judging suggests it with when and in how many turns (3 when it cannot tell; change it with − / +). It waits, sends an omen 1 turn before, then takes hold.
+- **Misfires · critical hits** (off by default, spells you cast yourself only): a misfire hits another target, takes another form, or bounces back at you (5%); a critical hit lasts twice as long, with no cooldown when the rules are on (10%). A toast tells you at once, the card gets a tag, and **↶** puts the spell back as you meant it. Mana is spent as usual.
+- **Record cards in the chat** (on by default): a small card under each message where magic happened — under your message what you did, under a reply what happened in it. Tap a line to open its status card. The cards are on screen only: nothing is written into the message, the chat file, or what the AI is sent. They show no more than the status window does. Turning the setting (or Mage) off removes them at once.
+
 ### Settings
 
 - **Look**: Default (follows your theme), Old tome, or Cursed book. Every look has the same buttons in the same places.
@@ -102,6 +110,7 @@ Both need AI judging to be on.
 - **Connection profile** used for 🎲 Cause and "Fill in". If you leave it empty, your current API is used.
 - **Magic rules**, max mana, loadout size, and **Curses end only the set way**.
 - **AI judging**: mode (Off / Suggest / Auto), **Tell me when the story says a spell broke**, the connection profile for checks (same as 🎲 Cause by default), and how many recent messages it reads (4).
+- **Flair**: misfires · critical hits and their chances, record cards in the chat.
 - Language (English / 한국어), the random-form pool, a window-position reset, and backup export/import.
 
 What the AI receives is always short English text (1–2 lines per effect). The AI still replies in whatever language you normally use. At most 4 effects can be active at once.
@@ -118,7 +127,7 @@ https://github.com/Near7707/Silly-Mage
 
 - The AI can still sometimes ignore or over-explain an effect. The note is kept short and clear to make this less likely.
 - AI judging can be wrong, which is why Suggest asks you first. Each check is one extra small request.
-- Secret conditions and the other spell families come in later stages.
+- Record cards are placed under the message text; a theme or another extension that changes how messages are built may move them.
 - In group chats, the dice roll for the member about to reply; this depends on SillyTavern telling which member it is.
 
 ## Trying it without SillyTavern

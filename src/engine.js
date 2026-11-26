@@ -36,7 +36,9 @@ const isAI = (m) => m && !m.is_user && !m.is_system;
 export function chatView(skipLast = false) {
     let list = [];
     try { list = Array.isArray(ctx().chat) ? ctx().chat : []; } catch { list = []; }
-    if (skipLast && list.length) list = list.slice(0, -1);
+    // A number: the chat as it was before message `skipLast` (0.7.0, for "what did that reply carry").
+    if (typeof skipLast === 'number') list = list.slice(0, Math.max(0, skipLast));
+    else if (skipLast && list.length) list = list.slice(0, -1);
     const keys = list.map(msgKey);
     const index = new Map();
     keys.forEach((k, i) => { if (k && !index.has(k)) index.set(k, i); });
@@ -74,7 +76,7 @@ export function posOf(view, ref) {
 function roll(effectId, key) { return (hash(`${effectId}|${key}`) % 10000) / 10000; }
 
 /** A judgment counts while its message is still there, unchanged. */
-function actionValid(view, a) {
+export function actionValid(view, a) {
     if (a.type === 'dispel') return true;
     if (!a.at || a.at.key == null) return true;
     return view.index.has(a.at.key);
@@ -158,9 +160,18 @@ export function views({ skipLast = false, chatId = currentChatId() } = {}) {
     const st = chatState(chatId);
     if (!st) return [];
     const view = chatView(skipLast);
+    // A blocked spell (0.7.0) is gone while the block counts; taking the block back brings it back.
+    const blocked = counteredIds(st, view);
     // A character's spell belongs to the reply it was noticed in: once that reply is gone, so is the spell.
-    return st.effects.filter(e => !e.strict || e.anchor?.key == null || view.index.has(e.anchor.key))
+    return st.effects.filter(e => (!e.strict || e.anchor?.key == null || view.index.has(e.anchor.key)) && !blocked.has(e.id))
         .map(e => evaluate(e, view, st.actions));
+}
+
+/** Effects a block (Counter) took off, while that block still counts. */
+export function counteredIds(st, view) {
+    const out = new Set();
+    for (const a of st?.actions || []) if (a.type === 'counter' && a.effectId && actionValid(view, a)) out.add(a.effectId);
+    return out;
 }
 
 /** Effects shown on screen: not ended, or ended but the AI still has to hear about it. */
@@ -236,6 +247,37 @@ export function judge(effectId, what, via = '', { batch = null, auto = false } =
     return addAction(a);
 }
 
+/**
+ * A block (Counter, 0.7.0). Either a spell that was only suggested (nothing is cast; `spell`
+ * says what it was), or an effect already in (it is taken off while the block counts).
+ * Bound to the reply it was made on, like a judgment; ↶ takes it back.
+ */
+export function counter({ effectId = null, avatar = '', name = '', spell = '', variant = '', target = null, kind = 'cast' }, rule = null) {
+    const a = { type: 'counter', effectId, avatar, name, spell, variant, target, kind, at: lastRef(), delivered: null };
+    if (rule) { a.ruled = true; a.cost = rule.cost; }
+    return addAction(a);
+}
+
+/** Valid blocks of this chat (newest last). */
+export function counters(view = chatView(false), st = chatState()) {
+    return (st?.actions || []).filter(a => a.type === 'counter' && actionValid(view, a)).sort((a, b) => (a.t || 0) - (b.t || 0));
+}
+
+/**
+ * A misfire or a critical hit on a spell I cast (0.7.0). `patch` changes the effect; what it
+ * replaced is kept, so ↶ puts the spell back as it was meant. Mana stays spent.
+ */
+export function applyDrama(effectId, info, patch) {
+    const st = chatState();
+    const e = st?.effects.find(x => x.id === effectId);
+    if (!e) return null;
+    const orig = {};
+    for (const k of Object.keys(patch)) orig[k] = e[k] === undefined ? null : structuredClone(e[k]);
+    Object.assign(e, structuredClone(patch));
+    e.drama = { ...info, orig };
+    return addAction({ type: 'drama', effectId, at: lastRef() });
+}
+
 export function dispel(effectIds, by = '', rule = null) {
     const st = chatState(currentChatId(), true);
     if (!st) return null;
@@ -269,6 +311,11 @@ export function undo() {
     // Things done together (a family Dispel, several auto judgments and casts) go back together.
     const gone = st.actions.filter(x => x.id === a.id || (a.batch && x.batch === a.batch));
     st.actions = st.actions.filter(x => !gone.includes(x));
+    // A misfire / critical hit taken back: the spell becomes what was meant.
+    for (const x of gone.filter(y => y.type === 'drama')) {
+        const e = st.effects.find(y => y.id === x.effectId);
+        if (e?.drama?.orig) { Object.assign(e, structuredClone(e.drama.orig)); delete e.drama; }
+    }
     // Taking back a character's cast removes that spell (and anything done to it).
     const casts = new Set(gone.filter(x => x.type === 'cast').map(x => x.effectId));
     if (casts.size) {
@@ -295,9 +342,9 @@ export function history(limit = 6) {
     const st = chatState();
     if (!st) return [];
     const view = chatView(false);
-    return st.actions.filter(a => actionValid(view, a))
+    return st.actions.filter(a => actionValid(view, a) && a.type !== 'drama')
         .sort((a, b) => b.t - a.t).slice(0, limit)
-        .map(a => ({ a, e: st.effects.find(e => e.id === a.effectId) })).filter(x => x.e);
+        .map(a => ({ a, e: st.effects.find(e => e.id === a.effectId) })).filter(x => x.e || x.a.type === 'counter');
 }
 
 /** Keep old, fully finished effects from piling up. */
@@ -309,6 +356,13 @@ function prune(st) {
         const out = new Set(gone.sort((a, b) => a.created - b.created).slice(0, gone.length - 8).map(e => e.id));
         st.effects = st.effects.filter(e => !out.has(e.id));
         st.actions = st.actions.filter(a => !out.has(a.effectId));
+    }
+    // Blocks of spells that were only suggested have no effect to go with: keep the newest few.
+    const loose = st.actions.filter(a => a.type === 'counter' && !a.effectId);
+    if (loose.length > 30) {
+        const out = new Set(loose.sort((a, b) => a.t - b.t).slice(0, loose.length - 30).map(a => a.id));
+        for (const a of st.actions) if (out.has(a.id) && a.ruled) (st.ledger ||= []).push({ spell: 'counter', t: a.t, at: a.at, cost: a.cost || 0 });
+        st.actions = st.actions.filter(a => !out.has(a.id));
     }
     const done = st.effects.map(e => evaluate(e, view, st.actions)).filter(v => v.status === 'ended' && !v.needEnd);
     const extra = done.length - 12;
@@ -342,6 +396,7 @@ export function markDelivered(mesId) {
     const key = msgKey(m);
     if (!st || !key || !isAI(m)) { sent = []; return false; }
     for (const n of sent) {
+        if (n.kind === 'counter') continue;
         const e = st.effects.find(x => x.id === n.effectId);
         if (!e) continue;
         e.deliveries ||= { cast: null, end: null };
@@ -351,6 +406,12 @@ export function markDelivered(mesId) {
             const a = st.actions.find(x => x.id === n.actionId);
             if (a) a.delivered = key;
         }
+    }
+    // Blocks: "it bounced off" was told with this reply.
+    for (const n of sent) {
+        if (n.kind !== 'counter') continue;
+        const a = st.actions.find(x => x.id === n.actionId);
+        if (a) a.delivered = key;
     }
     sent = [];
     save();
@@ -371,7 +432,7 @@ export function copyFromParent() {
     const from = structuredClone(s.chats[parent]);
     from.effects = from.effects.filter(e => e.anchor?.key == null || view.index.has(e.anchor.key));
     const keep = new Set(from.effects.map(e => e.id));
-    from.actions = from.actions.filter(a => keep.has(a.effectId) && actionValid(view, a));
+    from.actions = from.actions.filter(a => (keep.has(a.effectId) || (a.type === 'counter' && !a.effectId)) && actionValid(view, a));
     from.undoId = null;
     const here = (x) => x?.at?.key == null || view.index.has(x.at.key);
     from.reloads = (from.reloads || []).filter(here);
@@ -408,6 +469,51 @@ export function omenDue(v) {
     if (!v?.e?.omen || v.status !== 'pending') return false;
     if (v.e.trigger?.kind === 'turns') return v.pendingLeft === 1;
     return v.waited === 0; // a chance or a condition: right after it was cast
+}
+
+/** Blocks whose "it bounced off" note has not reached a reply yet. */
+export function undeliveredCounters({ skipLast = false } = {}) {
+    const view = chatView(skipLast);
+    return counters(view).filter(a => !delivered(view, a.delivered));
+}
+
+/** The newest AI reply: { i, key } or null. */
+export function lastAIReply(view = chatView(false)) {
+    for (let i = view.length - 1; i >= 0; i--) if (isAI(view.list[i])) return { i, key: view.keys[i] };
+    return null;
+}
+
+/**
+ * "Something is felt" (0.7.0): what the newest AI reply carried that I may sense and block —
+ * an omen of a waiting spell (not one I cast myself), or a secret cast that was noticed.
+ * It lasts until the next AI reply. @returns [{ effectId, kind: 'omen'|'sneak', e }]
+ */
+export function senses(chatId = currentChatId()) {
+    const st = chatState(chatId);
+    if (!st?.effects.length) return [];
+    const full = chatView(false);
+    const r = lastAIReply(full);
+    if (!r?.key) return [];
+    const blocked = counteredIds(st, full);
+    const out = [];
+    const here = (e) => !e.strict || e.anchor?.key == null || full.index.has(e.anchor.key);
+    for (const e of st.effects) {
+        if (blocked.has(e.id) || e.senseDone === r.key || !here(e)) continue;
+        if (e.veiled && e.sensed && e.anchor?.key === r.key) { out.push({ effectId: e.id, kind: 'sneak', e }); continue; }
+        if (!e.omen || e.source?.kind === 'me') continue;
+        const before = chatView(r.i); // the chat the reply was written for
+        if (omenDue(evaluate(e, before, st.actions))) out.push({ effectId: e.id, kind: 'omen', e });
+    }
+    return out;
+}
+
+/** "Leave it": the feeling goes away for this reply. */
+export function senseDone(effectId) {
+    const e = chatState()?.effects.find(x => x.id === effectId);
+    const r = lastAIReply();
+    if (!e || !r) return;
+    e.senseDone = r.key;
+    save();
 }
 
 export function reveal(effectId) {

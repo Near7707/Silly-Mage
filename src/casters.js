@@ -12,12 +12,13 @@
 
 import { ctx, settings, save, chatState, currentChatId } from './store.js';
 import { SPELLS, SPELL_ORDER, SIMPLE, FORMS, MAX_EFFECTS } from './spells.js';
-import { chatView, posOf, turnsAfter, cast, castAction, views, liveCount, lastRef } from './engine.js';
+import { chatView, posOf, turnsAfter, cast, castAction, views, liveCount, lastRef, actionValid } from './engine.js';
 import { targetName, nameEn } from './describe.js';
 
 export const CASTER_SPELLS = SPELL_ORDER.filter(id => id !== 'dispel');
 export const CASTER_DURATIONS = [3, 5, 10];
-const DEFAULT = Object.freeze({ spells: [], every: 10, duration: 5, dice: false, chance: 15, sneak: false });
+const DEFAULT = Object.freeze({ spells: [], every: 10, duration: 5, dice: false, chance: 15, sneak: false, notice: 30 });
+export const DELAY_TURNS = 3; // a delayed spell whose time the check could not read
 
 function hash(str) {
     let h = 0x811c9dc5;
@@ -52,6 +53,9 @@ function clean(raw) {
     c.dice = !!c.dice;
     c.sneak = !!c.sneak; // only with the dice: a hit may be cast in secret (2-C-1)
     c.chance = Math.min(100, Math.max(1, Math.round(Number(c.chance) || DEFAULT.chance)));
+    // How likely I sense a secret cast (0.7.0): 0 = never.
+    const n = Math.round(Number(c.notice));
+    c.notice = Number.isFinite(n) ? Math.min(100, Math.max(0, n)) : DEFAULT.notice;
     return c;
 }
 
@@ -96,6 +100,8 @@ export function waitTurns(avatar, view = chatView(false), upto = view.length - 1
         take(posOf(view, e.anchor));
     }
     for (const x of st?.casterLog || []) if (x.avatar === avatar && (x.at?.key == null || view.index.has(x.at.key))) take(posOf(view, x.at));
+    // A blocked try still counts: the character did cast (0.7.0).
+    for (const a of st?.actions || []) if (a.type === 'counter' && !a.effectId && a.avatar === avatar && actionValid(view, a)) take(posOf(view, a.at));
     if (last === null) return 0;
     const since = turnsAfter(view, last).filter(i => i <= upto).length;
     return Math.max(0, conf.every - since);
@@ -176,7 +182,7 @@ function formFrom(detail, seed) {
  * it, so no "just happened" note goes out for it. One ↶ takes it back (`batch` groups several).
  * @returns {string|null} the new effect id
  */
-export function castByCharacter({ avatar, name, spell, variant = '', detail = '', target, batch = null, sneak = false }) {
+export function castByCharacter({ avatar, name, spell, variant = '', detail = '', target, batch = null, sneak = false, sensed = false, later = false, when = '', turns = 0 }) {
     const conf = casterConf(avatar);
     if (sneak) {
         // Cast in secret for this reply already? (The reply event can come more than once.)
@@ -196,14 +202,22 @@ export function castByCharacter({ avatar, name, spell, variant = '', detail = ''
     if (SIMPLE[spell]?.needsX) spec.x = String(detail || '').trim().slice(0, 60) || 'someone else';
     if (spell === 'polymorph') spec.form = formFrom(detail, hash(`${avatar}|${Date.now()}`));
     // In secret: what it is, who cast it and how it ends stay hidden from me until I look.
-    if (sneak) { spec.veiled = true; spec.secretRelease = true; spec.clueEvery = 0; }
+    if (sneak) { spec.veiled = true; spec.secretRelease = true; spec.clueEvery = 0; if (sensed) spec.sensed = true; }
+    // A delayed spell (0.7.0): "you'll see when the sun sets" — it waits some turns, with an omen 1 turn before.
+    if (later) {
+        const n = Math.min(50, Math.max(1, Math.round(Number(turns) || DELAY_TURNS)));
+        spec.trigger = { kind: 'turns', turns: n, chance: 25, text: String(when || '').trim().slice(0, 60) };
+        spec.omen = true;
+        spec.delayed = true;
+    }
     const [id] = cast(spec, [target]);
     if (!id) return null;
     const st = chatState();
     const e = st.effects.find(x => x.id === id);
     if (e) {
         e.strict = true;
-        e.deliveries.cast = e.anchor?.key ?? null; // already written in the reply it was noticed in
+        // Already written in the reply it was noticed in (a delayed one is told when it takes hold).
+        if (!later) e.deliveries.cast = e.anchor?.key ?? null;
     }
     // A secret cast has no ↶ (the button would give it away); re-rolling the reply still takes it back.
     if (!sneak) castAction([id], batch);
@@ -241,6 +255,8 @@ export function rollDice(view, speakerAvatar, chatId = currentChatId(), skipLast
     const spName = spell === 'luck' && variant === 'bad' ? 'Jinx' : nameEn({ spell });
     // Cast in secret (2-C-1): half of the hits, when it is on.
     const sneak = conf.sneak && hash(`${seed}|sneak`) % 2 === 0;
+    // …and whether I sense it coming (0.7.0). Same message, same answer.
+    const noticed = sneak && hash(`${seed}|notice`) % 100 < conf.notice;
     const form = FORMS[hash(`${seed}|f`) % FORMS.length];
     let what = briefEn(spell, variant);
     let detail = '';
@@ -250,7 +266,7 @@ export function rollDice(view, speakerAvatar, chatId = currentChatId(), skipLast
     const text = sneak
         ? `This turn, ${me.name} secretly casts ${spName} on ${who}: it ${what}. Do not show the casting, do not name the spell and do not reveal who did it; only let its effect quietly begin in this reply.`
         : `This turn, ${me.name} casts ${spName} on ${who}: it ${what}. Show ${me.name} casting it naturally in this reply, in character.`;
-    return { avatar: speakerAvatar, name: me.name, spell, variant, target, text, sneak, detail };
+    return { avatar: speakerAvatar, name: me.name, spell, variant, target, text, sneak, noticed, detail };
 }
 
 /** The dice that hit for the reply now being written or just written (shown as 🎲 on the bar). */

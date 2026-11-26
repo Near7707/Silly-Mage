@@ -165,6 +165,11 @@ export function justNotes(v, world) {
         }
         if (e.visibility === 'targetUnaware') text += ` ${who} does not notice it yet.`;
         if (e.visibility === 'nobody') text += ' No one realizes it is magic.';
+        // A character's delayed spell (0.7.0) takes hold now.
+        const by = e.source?.kind === 'character' ? String(e.source.name || '').trim() : '';
+        if (e.delayed && by) text = `${by}'s spell, laid earlier to take hold ${e.trigger?.text ? `"${e.trigger.text}"` : 'later'}, takes hold now: ${text}`;
+        const d = dramaEn(e);
+        if (d) text += ` ${d}`;
         notes.push({ text, kind: 'cast', effectId: e.id });
     }
     for (const n of v.stageNotes || []) {
@@ -202,6 +207,41 @@ export function justNotes(v, world) {
     return notes;
 }
 
+/** A misfire or a critical hit (0.7.0), told once with the cast. */
+function dramaEn(e) {
+    const d = e.drama;
+    if (!d) return '';
+    const who = targetName(e.target);
+    if (d.kind === 'crit') return 'The spell took hold unusually strongly (a critical hit): the effect is vivid and lasts longer than usual.';
+    if (d.type === 'self') return `The spell misfired: it bounced back onto ${who}, the one who cast it.`;
+    if (d.type === 'target') return `The spell misfired: it was aimed at ${targetName(d.orig?.target)} but went astray and hit ${who} instead.`;
+    if (d.type === 'form') {
+        const meant = d.orig?.form ? formText({ form: d.orig.form }, 'en').name : 'something else';
+        return `The spell misfired and came out wrong: ${who} became a ${formText(e, 'en').name} instead of the intended ${meant}.`;
+    }
+    return 'The spell misfired and went oddly astray.';
+}
+
+/**
+ * "It bounced off" (Counter, 0.7.0), once, for the reply after the block.
+ * `a` = the block, `e` = the effect it took off (or null for a spell that was only suggested).
+ */
+export function counterNote(a, e) {
+    const me = targetName({ kind: 'user' });
+    const who = targetName(e ? e.target : a.target);
+    const spell = e ? nameEn(e) : (a.spell === 'luck' && a.variant === 'bad' ? 'Jinx' : SPELL_EN[a.spell] || 'spell');
+    const by = String((e?.source?.kind === 'character' ? e.source.name : a.name) || '').trim();
+    if (e?.veiled) {
+        return `The unseen magic that had quietly begun on ${who} was suddenly thrown off by ${me}: it bounced away and faded, and has no effect anymore. Do not reveal who cast it or what it was. Write it in this reply.`;
+    }
+    if (e && (a.kind === 'omen' || a.kind === 'pending')) {
+        return by && !e.veiled
+            ? `${by}'s waiting ${spell} spell on ${who} was turned aside by ${me} before it could take hold: it bounced off and faded. Write it in this reply.`
+            : `The unseen magic gathering around ${who} was turned aside by ${me} before it could take hold: it bounced off and faded. Do not explain where it came from. Write it in this reply.`;
+    }
+    return `${by || 'Someone'}'s ${spell} on ${who} was blocked by ${me}: the magic bounced off and fizzled out, so it has no effect. Write it in this reply.`;
+}
+
 /** One-off asks for this reply only (2-C-1): clues for a secret ending, omens of a waiting spell. */
 export function onceLines(list) {
     const out = [];
@@ -214,10 +254,11 @@ export function onceLines(list) {
 }
 
 /** The whole note for the AI, or '' when nothing is going on. `once`: extra lines for this reply only. */
-export function buildPrompt(list, { withNotes = true, once = [] } = {}) {
+export function buildPrompt(list, { withNotes = true, once = [], blocks = [] } = {}) {
     const world = settings().world;
     const ongoing = list.filter(v => v.status === 'active').map(ongoingLine);
-    const notes = withNotes ? list.flatMap(v => justNotes(v, world)) : [];
+    // `blocks`: [{ text, kind: 'counter', actionId }] — spells that bounced off (0.7.0).
+    const notes = withNotes ? [...list.flatMap(v => justNotes(v, world)), ...blocks] : [];
     const thisTurn = withNotes ? [...onceLines(list), ...once] : [];
     if (!ongoing.length && !notes.length && !thisTurn.length) return { text: '', notes: [] };
     const lines = ['[Magic effects in this story — keep them consistent. Do not mention this note or its numbers.]'];

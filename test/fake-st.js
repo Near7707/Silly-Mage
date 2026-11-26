@@ -64,16 +64,36 @@
     };
     window.SillyTavern = { getContext: () => ctx };
 
+    // Messages are drawn like SillyTavern's: .mes[mesid] > .mes_block > .ch_name + .mes_text.
+    function mesEl(m, i) {
+        const d = document.createElement('div');
+        d.className = 'mes';
+        d.setAttribute('mesid', String(i));
+        d.setAttribute('is_user', String(!!m.is_user));
+        d.innerHTML = `<div class="mes_block"><div class="ch_name"><b>#${i} ${m.is_user ? ctx.name1 : m.name}</b> <small>${m.send_date.slice(11, 19)}</small></div><div class="mes_text">${m.mes}</div></div>`;
+        return d;
+    }
+    /** The whole chat drawn again (opening a chat). `from`: only the last messages are drawn, like SillyTavern. */
     function render() {
         const box = document.getElementById('chat');
         box.innerHTML = '';
-        ctx.chat.forEach((m, i) => {
-            const d = document.createElement('div');
-            d.className = 'mes';
-            d.innerHTML = `<b>#${i} ${m.is_user ? ctx.name1 : m.name}</b> <small>${m.send_date.slice(11, 19)}</small><div>${m.mes}</div>`;
-            box.appendChild(d);
-        });
+        const list = ctx.chat;
+        const from = Math.max(0, list.length - (state.drawLimit || Infinity));
+        const frag = document.createDocumentFragment();
+        for (let i = from; i < list.length; i++) frag.appendChild(mesEl(list[i], i));
+        box.appendChild(frag);
         box.scrollTop = box.scrollHeight;
+    }
+    /** One message drawn at the end (sent / received). */
+    function addOne(i) {
+        const box = document.getElementById('chat');
+        box.appendChild(mesEl(ctx.chat[i], i));
+        box.scrollTop = box.scrollHeight;
+    }
+    /** A message's text drawn again (swipe / edit): the rest of the message stays. */
+    function redrawText(i) {
+        const el = document.querySelector(`#chat > .mes[mesid="${i}"] .mes_text`);
+        if (el) el.innerHTML = ctx.chat[i].mes;
     }
 
     let replyNo = 0;
@@ -88,21 +108,22 @@
             const i = list.length - 1;
             list[i] = { ...list[i], mes: text, send_date: stamp() };
             await eventSource.emit(eventTypes.MESSAGE_RECEIVED, i, 'swipe');
+            redrawText(i);
             await eventSource.emit(eventTypes.MESSAGE_SWIPED, i);
         } else {
             list.push({ is_user: false, is_system: false, name: ch.name, mes: text, send_date: stamp() });
             await eventSource.emit(eventTypes.MESSAGE_RECEIVED, list.length - 1, type);
+            addOne(list.length - 1);
             await eventSource.emit(eventTypes.CHARACTER_MESSAGE_RENDERED, list.length - 1);
         }
         await eventSource.emit(eventTypes.GENERATION_ENDED, list.length);
-        render();
     }
 
     async function send(text) {
         chat().push({ is_user: true, is_system: false, name: ctx.name1, mes: text || '(my message)', send_date: stamp() });
         await eventSource.emit(eventTypes.MESSAGE_SENT, chat().length - 1);
+        addOne(chat().length - 1);
         await eventSource.emit(eventTypes.USER_MESSAGE_RENDERED, chat().length - 1);
-        render();
         await generate('normal');
     }
 
@@ -113,7 +134,26 @@
         /** One full turn: my message + an AI reply. */
         turn: (text) => send(text),
         swipe: () => generate('swipe'),
-        async deleteLast() { chat().pop(); await eventSource.emit(eventTypes.MESSAGE_DELETED, chat().length); render(); },
+        async deleteLast() { chat().pop(); document.querySelector(`#chat > .mes[mesid="${chat().length}"]`)?.remove(); await eventSource.emit(eventTypes.MESSAGE_DELETED, chat().length); },
+        /** A long chat for speed checks: n messages, only the last `draw` drawn. */
+        async longChat(n, draw = 100) {
+            const list = chat();
+            list.length = 0;
+            for (let i = 0; i < n; i++) list.push({ is_user: i % 2 === 1, is_system: false, name: i % 2 ? ctx.name1 : 'Mira', mes: `Line ${i}`, send_date: stamp() });
+            state.drawLimit = draw;
+            render();
+            await eventSource.emit(eventTypes.CHAT_CHANGED, state.chatName);
+        },
+        /** Load `n` more older messages above (like "show more messages"). */
+        async loadMore(n) {
+            const box = document.getElementById('chat');
+            const first = Number(box.querySelector('.mes')?.getAttribute('mesid') ?? ctx.chat.length);
+            const from = Math.max(0, first - n);
+            const frag = document.createDocumentFragment();
+            for (let i = from; i < first; i++) frag.appendChild(mesEl(ctx.chat[i], i));
+            box.prepend(frag);
+            await eventSource.emit(eventTypes.MORE_MESSAGES_LOADED);
+        },
         async branch() {
             const from = state.chatName;
             state.chatName = `${from} Branch`;

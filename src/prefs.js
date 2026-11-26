@@ -2,12 +2,12 @@
 // inside the Mage window. Both use the same fields and the same handlers.
 
 import { t, setLanguage, lang, LANGUAGES } from './i18n.js';
-import { ctx, settings, save, uiLang, chooseLang, exportData, importData } from './store.js';
+import { ctx, settings, save, uiLang, chooseLang, exportData, importData, pct } from './store.js';
 import { FORMS } from './spells.js';
 import { getProfiles } from './ai.js';
 import { resetPos } from './win.js';
 
-export const VERSION = '0.6.0';
+export const VERSION = '0.7.0';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const toast = (kind, msg) => { try { globalThis.toastr?.[kind]?.(msg, 'Mage'); } catch { /* ignore */ } };
@@ -66,6 +66,11 @@ export function prefsHtml(win) {
         + field(t('set_judge_profile'), sel('judgeProfile', [], '').replace('</select>', `${profileOptions(true)}</select>`))
         + field(t('set_judge_count'), num('judgeCount', s.judgeCount, 2, 20))
         + hint(t('set_judge_cost'))
+        + sub(t('set_drama_sub'))
+        + check('drama', s.drama, t('set_drama')) + hint(t('set_drama_hint'))
+        + field(t('set_miscast'), num('miscastChance', s.miscastChance, 0, 100))
+        + field(t('set_crit'), num('critChance', s.critChance, 0, 100))
+        + check('logCards', s.logCards, t('set_logcards')) + hint(t('set_logcards_hint'))
         + sub(t('set_pool')) + `<div class="mage-pool">${pool}</div>` + hint(t('set_pool_hint'))
         + sub(t('set_ai'))
         + field(t('set_profile'), sel('profile', [], '').replace('</select>', `${profileOptions()}</select>`))
@@ -132,6 +137,10 @@ export function prefsChange(e) {
         case 'judgeUnbind': s.judgeUnbind = el.checked; save(); hooks.redrawAll(); break;
         case 'judgeProfile': s.judgeProfile = el.value; save(); hooks.redrawAll(); break;
         case 'judgeCount': s.judgeCount = Math.min(20, Math.max(2, Math.round(Number(el.value) || 4))); el.value = s.judgeCount; save(); hooks.redrawAll(); break;
+        case 'drama': s.drama = el.checked; save(); hooks.redrawAll(); break;
+        case 'miscastChance': s.miscastChance = pct(el.value, 5); el.value = s.miscastChance; save(); hooks.redrawAll(); break;
+        case 'critChance': s.critChance = pct(el.value, 10); el.value = s.critChance; save(); hooks.redrawAll(); break;
+        case 'logCards': s.logCards = el.checked; save(); hooks.redrawAll(); break;
         case 'preset': s.sendPreset = el.checked; save(); break;
         case 'reasoning': s.reasoning = el.value; save(); break;
         case 'context': s.contextCount = Math.min(20, Math.max(0, Math.round(Number(el.value) || 0))); el.value = s.contextCount; save(); break;
