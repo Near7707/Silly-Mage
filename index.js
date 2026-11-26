@@ -12,7 +12,7 @@ import { MAGE_GLYPH } from './src/icons.js';
 import { resetPos } from './src/win.js';
 import { mountBar, refresh, openWindow, closeWindow, isOpen, setOnChange, disableAll, rerenderAll } from './src/ui.js';
 
-export const VERSION = '0.1.0';
+export const VERSION = '0.1.1';
 const PROMPT_KEY = 'mage_effects';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));

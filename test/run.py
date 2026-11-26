@@ -210,6 +210,7 @@ def main():
                             page.click('#mage_bar [data-mage-judge]')
                             cast(page, form='b:turtle', duration=3, target='user')
                             page.wait_for_timeout(150)
+                            check(page.inner_text('.mage-title b') == ('Warlock' if skin == 'cursed' else 'Mage'), f'{skin}: window title')
                             # Buttons must stay one line.
                             tall = page.evaluate("""[...document.querySelectorAll('.mage-root button')].filter(b => b.offsetParent && !b.classList.contains('mage-card-head') && b.getBoundingClientRect().height > 44).map(b => b.className + ':' + b.textContent.trim().slice(0, 20))""")
                             check(not tall, f'{skin}/{theme}/{tag}/{lang}: no tall buttons {tall[:3]}')

@@ -235,6 +235,8 @@ function renderWindow() {
     const s = settings();
     winEl.className = `mage-win mage-root mage-skin-${s.skin}${s.winCollapsed ? ' mage-collapsed' : ''}`;
     ui.vars = syncTheme(winEl, s.skin);
+    // The cursed book belongs to a warlock; menus and toasts stay "Mage".
+    winEl.querySelector('.mage-title b').textContent = s.skin === 'cursed' ? 'Warlock' : 'Mage';
     const list = shown(views());
     const live = liveCount(views());
     const sum = winEl.querySelector('.mage-sum');
