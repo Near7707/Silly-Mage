@@ -36,7 +36,7 @@ You can just type "she turned into a cat" and the AI will play along. A few turn
 1. Open **Mage** from the wand menu (or from its panel in Extensions).
 2. **Cast**: choose *Who / What / How long*. Open **More** to set who cast it, why, when it fires (now, after some turns, a chance each turn, or a condition), how it ends, and who knows.
 3. **🎲 Cause** asks the AI for a cause that ties into the recent story. You see it first and choose whether to use it.
-4. The **status bar above the input box** shows active effects. When the condition happens in the story, press its button. Press **↶** to undo the last press.
+4. The **status bar above the input box** shows active effects. When the condition happens in the story, press its button. Press **↶** to undo the last press. Each chip shows the target's picture (character card or persona image); a spell cast on two people at once shares one chip.
 5. Press **⌃** to open the status window. It can be dragged by its title bar, folded, and it remembers where you put it.
 
 ### Turns, swipes and deletes

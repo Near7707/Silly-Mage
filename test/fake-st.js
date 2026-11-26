@@ -47,6 +47,9 @@
         get characterId() { return state.characterId; },
         groupId: null, groups: [],
         name1: 'Juno',
+        userAvatar: params.has('nopics') ? '' : 'juno.png',
+        // test pictures: Mira and Juno have one, Bramwell has none (falls back to the initial)
+        getThumbnailUrl: (type, file) => (params.has('nopics') ? 'avatars/none.svg' : `avatars/${String(file).replace(/\.png$/, '.svg')}`),
         getCurrentLocale: () => params.get('stlocale') || 'en',
         getCurrentChatId: () => (state.characterId === undefined ? undefined : state.chatName),
         get chat() { return state.characterId === undefined ? [] : chat(); },

@@ -66,11 +66,56 @@ function effectTitle(e) {
     return spellName(e.spell);
 }
 
-function ini(target) {
+// ---------- target pictures (character card / persona image, initial as fallback) ----------
+
+const badPics = new Set(); // image addresses that failed to load: show the initial instead
+
+function thumb(type, file) {
+    if (!file) return '';
+    try {
+        const f = ctx().getThumbnailUrl;
+        if (typeof f === 'function') return String(f(type, file) || '');
+    } catch { /* ignore */ }
+    return `/thumbnail?type=${type}&file=${encodeURIComponent(file)}`;
+}
+
+function userPic() {
+    try {
+        const c = ctx();
+        const file = c.userAvatar || c.user_avatar
+            || document.querySelector('#user_avatar_block .avatar-container.selected')?.dataset?.avatarId;
+        if (file) return thumb('persona', file);
+        const msgs = c.chat || [];
+        for (let i = msgs.length - 1; i >= 0; i--) {
+            if (msgs[i]?.is_user && msgs[i].force_avatar) return String(msgs[i].force_avatar);
+        }
+    } catch { /* ignore */ }
+    const img = [...document.querySelectorAll('#chat .mes[is_user="true"] .avatar img')].pop();
+    return img?.getAttribute('src') || '';
+}
+
+function targetPic(target) {
+    if (!target) return '';
+    if (target.kind === 'user') return userPic();
+    return thumb('avatar', target.avatar);
+}
+
+function ini(target, big = false) {
     const name = targetName(target);
     const c = target?.kind === 'user' ? 'var(--mage-accent)' : '#7a52b3';
-    return `<span class="mage-ini" style="--mage-ini:${c}" title="${esc(name)}">${esc(initial(name))}</span>`;
+    const pic = targetPic(target);
+    const img = pic && !badPics.has(pic) ? `<img src="${esc(pic)}" alt="" loading="lazy" draggable="false">` : '';
+    return `<span class="mage-ini${big ? ' mage-ini-big' : ''}" style="--mage-ini:${c}" title="${esc(name)}">${esc(initial(name))}${img}</span>`;
 }
+
+// A picture that fails to load is dropped, so the initial under it shows.
+document.addEventListener('error', (ev) => {
+    const el = ev.target;
+    if (el?.tagName === 'IMG' && el.parentElement?.classList?.contains('mage-ini')) {
+        badPics.add(el.getAttribute('src'));
+        el.remove();
+    }
+}, true);
 
 function isCurse(e) { return e.method === 'curse' || e.method === 'stacked'; }
 
@@ -126,9 +171,9 @@ function condButtons(v) {
     return out;
 }
 
-function condBtnHtml(v, b, cls = 'mage-cond') {
+function condBtnHtml(v, b, cls = 'mage-cond', who = false) {
     return `<button type="button" class="${cls}" data-mage-judge="${esc(v.e.id)}" data-what="${b.what}" data-via="${b.via || ''}" title="${esc(t(`judge_${b.what}`))}">`
-        + `<span class="mage-ell">${esc(b.label)}</span></button>`;
+        + (who ? ini(v.e.target) : '') + `<span class="mage-ell">${esc(b.label)}</span></button>`;
 }
 
 // ---------- status bar ----------
@@ -153,7 +198,7 @@ function onBarClick(e) {
     if (e.target.closest('[data-mage-undo]')) return doUndo();
     const o = e.target.closest('[data-mage-open]');
     if (o) {
-        if (o.dataset.mageOpen) { ui.opened.add(o.dataset.mageOpen); ui.allClosed = false; return openWindow('status', { expand: true }); }
+        if (o.dataset.mageOpen) { for (const id of o.dataset.mageOpen.split(',')) ui.opened.add(id); ui.allClosed = false; return openWindow('status', { expand: true }); }
         if (ui.open) return closeWindow(); // ⌃ toggles
         return openWindow('status');
     }
@@ -167,17 +212,27 @@ function renderBar(list) {
     if (!s.enabled || !currentChatId() || !list.length) { barEl.hidden = true; barEl.innerHTML = ''; return; }
     const barSkin = s.skin === 'tome' ? 'theme' : s.skin; // the bar keeps the chat readable; old-book paper only in the window
     const barMode = colorMode(barSkin, syncTheme(barEl, barSkin));
-    const chip = (v) => {
-        const e = v.e;
+    // One spell cast on two people at once shows as one chip with both pictures, while both
+    // halves still look the same (same state and text); once they differ, they split again.
+    const units = [];
+    for (const v of list) {
+        const u = v.e.group && units.find(x => x[0].e.group === v.e.group && x[0].status === v.status && chipText(x[0]) === chipText(v));
+        if (u) u.push(v); else units.push([v]);
+    }
+    const chip = (u) => {
+        const e = u[0].e, v = u[0];
         const col = famColor(FAMILIES[SPELLS[e.spell]?.family || 'change'].color, barMode);
-        return `<button type="button" class="mage-chip${v.status !== 'active' ? ' mage-dim' : ''}" data-mage-open="${esc(e.id)}" style="--mage-fam:${col}" title="${esc(effectTitle(e))}">`
+        const who = u.length > 1 ? `<span class="mage-pair">${u.map(x => ini(x.e.target)).join('')}</span>` : ini(e.target);
+        return `<button type="button" class="mage-chip${v.status !== 'active' ? ' mage-dim' : ''}" data-mage-open="${esc(u.map(x => x.e.id).join(','))}" style="--mage-fam:${col}" title="${esc(effectTitle(e))}">`
             + iconSvg(e.surprise && v.status === 'pending' ? 'polymorph' : SPELLS[e.spell]?.icon, { size: 18, curse: isCurse(e) })
-            + ini(e.target) + `<span class="mage-ell">${esc(chipText(v))}</span></button>`;
+            + who + `<span class="mage-ell">${esc(chipText(v))}</span></button>`;
     };
-    const conds = (v) => condButtons(v).map(b => condBtnHtml(v, b)).join('');
+    // In a shared chip, each person's condition button carries a small picture, so it's clear who it judges.
+    const conds = (u) => u.map(v => condButtons(v).map(b => condBtnHtml(v, b, 'mage-cond', u.length > 1)).join('')).join('');
     // Each chip is followed by its own condition buttons, so the one to press sits next to it.
-    const shownHtml = list.slice(0, 2).map(v => chip(v) + conds(v)).join('');
-    const more = list.length > 2 ? `<button type="button" class="mage-chip mage-more" data-mage-open="">+${list.length - 2}</button>` + list.slice(2).map(conds).join('') : '';
+    const shownHtml = units.slice(0, 2).map(u => chip(u) + conds(u)).join('');
+    const rest = units.slice(2).flat().length;
+    const more = units.length > 2 ? `<button type="button" class="mage-chip mage-more" data-mage-open="">+${rest}</button>` + units.slice(2).map(conds).join('') : '';
     const undoBtn = undoable() ? `<button type="button" class="mage-mini" data-mage-undo title="${esc(t('undo'))}" aria-label="${esc(t('undo'))}">↶</button>` : '';
     barEl.innerHTML = `<div class="mage-bar-row">${shownHtml}${more}</div>${undoBtn}`
         + `<button type="button" class="mage-mini" data-mage-open="" title="${esc(t('open_status'))}" aria-label="${esc(t('open_status'))}">⌃</button>`;
@@ -373,7 +428,7 @@ function cardHtml(v, open) {
     if (open) {
         const L = lang();
         const st = stateText(e, v, L);
-        rows += row(t('r_target'), `${ini(e.target)} ${esc(targetName(e.target))}`, 'mage-row-target');
+        rows += row(t('r_target'), `${ini(e.target, true)} ${esc(targetName(e.target))}`, 'mage-row-target');
         if (!hide) {
             rows += row(t('r_source'), sourceLabel(e.source));
             rows += row(t('r_cause'), e.cause ? esc(e.cause) + (e.visibility === 'causeHidden' ? ` <span class="mage-muted">${esc(t('vis_causeHidden_short'))}</span>` : '') : '');
