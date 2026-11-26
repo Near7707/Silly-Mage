@@ -7,7 +7,7 @@ import { FORMS } from './spells.js';
 import { getProfiles } from './ai.js';
 import { resetPos } from './win.js';
 
-export const VERSION = '0.1.2';
+export const VERSION = '0.1.3';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const toast = (kind, msg) => { try { globalThis.toastr?.[kind]?.(msg, 'Mage'); } catch { /* ignore */ } };
@@ -45,7 +45,7 @@ export function prefsHtml(win) {
     const pool = [...FORMS.map(f => [`b:${f.id}`, f.name[L] || f.name.en]), ...s.customForms.map(c => [`c:${c.id}`, c.name])]
         .map(([id, name]) => `<label class="mage-pchip"><input type="checkbox" data-mage-pool="${esc(id)}"${s.randomPool.includes(id) ? ' checked' : ''}><span>${esc(name)}</span></label>`).join('');
     return `<div class="mage-prefs${win ? ' mage-prefs-win' : ''}">`
-        + check('enabled', s.enabled, t('set_enabled'))
+        + check('enabled', s.enabled, t('set_enabled')) + hint(t('set_enabled_hint'))
         + field(t('set_language'), sel('lang', LANGUAGES.map(l => [l.id, l.label]), L))
         + field(t('set_skin'), sel('skin', ['theme', 'tome', 'cursed'].map(k => [k, t(`skin_${k}`)]), s.skin))
         + field(t('set_world'), sel('world', ['common', 'rare', 'none'].map(k => [k, t(`world_${k}`)]), s.world))

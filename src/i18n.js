@@ -86,7 +86,7 @@ const EN = {
     seed_water: 'Curse of Water', seed_water_cond: '💧 touched water', seed_turtle: 'Turtle Prank', seed_pocket: 'Pocket Size',
     // settings panel
     set_hint: 'Magic events for your chat: who cast it, why and when — kept in mind every turn.',
-    set_open: 'Open Mage', set_enabled: 'Turn on Mage', set_language: 'Language', set_skin: 'Look',
+    set_open: 'Open Mage', set_enabled: 'Summon the Mage', set_enabled_hint: 'Turns the Mage extension on or off. Off = the status bar and the notes to the AI all stop.', set_language: 'Language', set_skin: 'Look',
     skin_theme: 'Default (follow theme)', skin_tome: 'Old tome', skin_cursed: 'Cursed book',
     set_world: 'Magic in this world', world_common: 'Common (fantasy)', world_rare: 'Rare (modern)', world_none: 'None',
     world_hint_common: 'People take magic in stride.', world_hint_rare: 'People are surprised and look for an explanation.',
@@ -177,7 +177,7 @@ const KO = {
     timing_now: '즉시', timing_turns: '지연', timing_chance: '확률', timing_condition: '조건', kind_stacked: '중첩',
     seed_water: '물의 저주', seed_water_cond: '💧 물에 닿음', seed_turtle: '거북이 장난', seed_pocket: '주머니 크기',
     set_hint: '채팅에 마법 사건을 심어요. 누가·왜·언제 걸었는지까지, 매 턴 AI가 잊지 않게 붙잡아 둬요.',
-    set_open: 'Mage 열기', set_enabled: 'Mage 켜기', set_language: '언어', set_skin: '스킨',
+    set_open: 'Mage 열기', set_enabled: '마법사 부르기', set_enabled_hint: 'Mage 확장 켜기/끄기예요. 끄면 상태 줄과 AI에게 보내는 알림이 모두 멈춰요.', set_language: '언어', set_skin: '스킨',
     skin_theme: '기본 (테마 따라가기)', skin_tome: '고서', skin_cursed: '저주서',
     set_world: '이 세계의 마법', world_common: '흔함 (판타지)', world_rare: '드묾 (현대물)', world_none: '없음',
     world_hint_common: '다들 덤덤하게 반응해요.', world_hint_rare: '놀라고 당황하고, 설명을 찾으려 해요.',
