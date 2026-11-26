@@ -18,6 +18,7 @@ import {
 } from './engine.js';
 import { targetName, initial, formText, stateText } from './describe.js';
 import { iconSvg, framedIcon, MAGE_GLYPH } from './icons.js';
+import { LEARN, learnedIds } from './learn.js';
 import { syncTheme, famColor, colorMode } from './theme.js';
 import { attachWindow, place } from './win.js';
 import { askCause, askForm } from './ai.js';
@@ -48,6 +49,9 @@ const ui = {
     casterSel: null,    // Casters tab: the member being set up
     casterImport: false, // Casters tab: "copy from another chat" list
     senseOpen: false,   // "Something is felt" box above the status bar (0.7.0)
+    learn: null,        // Spellbook "Learn spells" screen: { cat, focus, picked: [] } (0.9.0)
+    bookNew: null,      // card ids just learned (NEW ribbon until the Spellbook is left)
+    learnedN: 0,        // "n spells learned" note on the Spellbook
 };
 
 let barEl = null;
@@ -569,6 +573,7 @@ function renderWindow() {
     orn.innerHTML = s.skin === 'tome' ? '❧ ✥ ☙' : s.skin === 'cursed' ? (ui.view === 'book' ? '<span class="mage-drop"></span><span class="mage-drop"></span><span class="mage-drop"></span>' : '') : '';
     orn.hidden = !orn.innerHTML;
     if (s.winCollapsed) return;
+    if (ui.view !== 'book') { ui.learn = null; ui.bookNew = null; ui.learnedN = 0; }
     const body = winEl.querySelector('.mage-body');
     const foot = winEl.querySelector('.mage-foot');
     const top = body.scrollTop;
@@ -579,7 +584,9 @@ function renderWindow() {
         body.innerHTML = `<div class="mage-editing">⚙ ${esc(t('settings'))}</div>${prefsHtml(true)}`;
         foot.innerHTML = `<button type="button" class="mage-btn" data-mage-gear><span class="mage-ell">← ${esc(t('back'))}</span></button>`;
     }
+    else if (ui.learn) { body.innerHTML = learnHtml(); foot.innerHTML = learnFoot(); }
     else { body.innerHTML = bookHtml(); foot.innerHTML = bookFoot(); }
+    foot.hidden = !foot.innerHTML.trim();
     if (ui.keepScroll) body.scrollTop = top; else body.scrollTop = 0;
     ui.keepScroll = false;
 }
@@ -1218,17 +1225,9 @@ function casterClick(q) {
 function seedBook() {
     const s = settings();
     if (s.bookSeeded) return;
+    // 0.9.0: a new Spellbook starts empty; the example cards are learned from "Learn spells".
+    // Books seeded before keep their three cards.
     s.bookSeeded = true;
-    const L = lang();
-    const base = newDraft();
-    const mk = (name, over) => ({ id: uid('c'), name, spec: { ...structuredClone(base), ...over, title: name } });
-    s.book.push(
-        mk(t('seed_water'), { spell: 'polymorph', form: { id: 'cat' }, method: 'stacked', duration: 0,
-            trigger: { kind: 'now', turns: 2, chance: 25, text: t('seed_water_cond') },
-            source: { kind: 'object', name: RANDOM_OBJECTS[L][0] }, motive: 'punishment', release: { kind: 'truth', text: '' } }),
-        mk(t('seed_turtle'), { spell: 'polymorph', form: { id: 'turtle' }, duration: 3, motive: 'prank' }),
-        mk(t('seed_pocket'), { spell: 'mite', duration: 5, source: { kind: 'object', name: RANDOM_OBJECTS[L][1] }, motive: 'mistake' }),
-    );
     save();
 }
 
@@ -1269,12 +1268,16 @@ function timingLabel(d) {
 function bookHtml() {
     seedBook();
     const s = settings();
-    if (!s.book.length) return `<div class="mage-empty"><p>${esc(t('book_empty'))}</p></div>`;
-    return s.book.map(c => {
+    if (!s.book.length) return bookEmptyHtml();
+    const note = ui.learnedN ? `<div class="mage-learn-note" role="status">${sealHtml()}<span class="mage-ell">${esc(t('learn_done', { n: ui.learnedN }))}</span>`
+        + `<button type="button" class="mage-btn mage-icon-btn mage-small" data-mage-learn-note-x aria-label="${esc(t('close'))}">✕</button></div>` : '';
+    return note + s.book.map(c => {
         const d = c.spec || {};
         const fam = SPELLS[d.spell]?.family || 'change';
         const badge = d.method === 'stacked' ? t('method_stacked') : d.method === 'curse' ? t('method_curse') : '';
-        return `<div class="mage-bcard" style="--mage-fam:${famCol(fam)}">`
+        const isNew = !!ui.bookNew?.has(c.id);
+        return `<div class="mage-bcard${isNew ? ' mage-bcard-new' : ''}" style="--mage-fam:${famCol(fam)}">`
+            + (isNew ? `<span class="mage-ribbon" aria-label="${esc(t('learn_new'))}">${esc(t('learn_new'))}</span>` : '')
             + framedIcon(SPELLS[d.spell]?.icon, { skin: s.skin, curse: isCurse(d) })
             + `<div class="mage-bcard-main"><div class="mage-bcard-top"><span class="mage-tag" style="--mage-fam:${famCol(fam)}">${esc(famName(fam))} · ${esc(timingLabel(d))}</span>`
             + (badge ? `<span class="mage-tag mage-tag-curse">${esc(badge)}</span>` : '') + '</div>'
@@ -1284,8 +1287,127 @@ function bookHtml() {
     }).join('');
 }
 
+const BOOK_ICON = '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5c3-1 5-1 8 1 3-2 5-2 8-1v14c-3-1-5-1-8 1-3-2-5-2-8-1z"/><path d="M12 6v14"/></svg>';
+const CHECK_ICON = '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg>';
+const sealHtml = (inner = CHECK_ICON) => `<span class="mage-seal" aria-hidden="true">${inner}</span>`;
+
+/** An empty Spellbook: three fanned cards and the way to the example spells. */
+function bookEmptyHtml() {
+    const s = settings();
+    const fan = `<div class="mage-fan" aria-hidden="true"><span class="mage-fan-card mage-fan-l" style="--mage-fam:${famCol('mind')}"></span>`
+        + `<span class="mage-fan-card mage-fan-r" style="--mage-fam:${famCol('illusion')}"></span>`
+        + `<span class="mage-fan-card mage-fan-c" style="--mage-fam:${famCol('change')}">${framedIcon('polymorph', { skin: s.skin, size: 50 })}${sealHtml('M')}</span></div>`;
+    return `<div class="mage-empty mage-book-empty">${fan}<div class="mage-kicker">${esc(t('book_kicker'))}</div>`
+        + `<div class="mage-book-empty-t">${esc(t('book_empty_t'))}</div><p>${esc(t('book_empty_p'))}</p>`
+        + `<button type="button" class="mage-btn mage-primary mage-wide" data-mage-learn-open>${BOOK_ICON}<span class="mage-ell">${esc(t('learn_open_n', { n: LEARN.length }))}</span></button>`
+        + `<button type="button" class="mage-btn mage-wide" data-mage-card-new><span class="mage-ell">+ ${esc(t('book_blank'))}</span></button></div>`;
+}
+
 function bookFoot() {
-    return `<button type="button" class="mage-btn mage-primary mage-wide" data-mage-card-new><span class="mage-ell">+ ${esc(t('new_card'))}</span></button>`;
+    if (!settings().book.length) return '';
+    return `<button type="button" class="mage-btn" data-mage-learn-open>${BOOK_ICON}<span class="mage-ell">${esc(t('learn_open'))}</span></button>`
+        + `<button type="button" class="mage-btn mage-primary" data-mage-card-new><span class="mage-ell">+ ${esc(t('new_card'))}</span></button>`;
+}
+
+// ---------- Learn spells (0.9.0) ----------
+
+const LEARN_CATS = ['all', 'change', 'mind', 'illusion', 'fate', 'special'];
+const learnCat = (e) => (e.special ? 'special' : SPELLS[e.spell].family);
+const learnName = (e) => (lang() === 'ko' ? e.ko : e.en);
+
+/** The card an example spell becomes, in the language shown now. */
+function learnSpec(e) {
+    const name = learnName(e);
+    const d = { ...newDraft(), spell: e.spell, ...structuredClone(e.over(lang())), title: name };
+    return { ...buildSpec(d), title: name };
+}
+
+function openLearn() {
+    const got = learnedIds(settings().book);
+    const first = LEARN.find(e => !got.has(e.id)) || LEARN[0];
+    ui.learn = { cat: 'all', focus: first.id, picked: [] };
+    ui.learnedN = 0;
+    renderWindow();
+}
+
+function learnHtml() {
+    const L = ui.learn;
+    const got = learnedIds(settings().book);
+    const catCol = (c) => (c === 'all' ? 'var(--mage-text)' : c === 'special' ? 'var(--mage-accent)' : famCol(c));
+    let h = `<div class="mage-learn-head"><button type="button" class="mage-btn mage-icon-btn mage-small" data-mage-learn-back aria-label="${esc(t('back'))}">‹</button>`
+        + `<div class="mage-learn-ttl"><div class="mage-kicker">SKILLS</div><div class="mage-learn-title mage-ell">${esc(t('learn_title'))}</div></div>`
+        + `<div class="mage-learn-count"><span>${esc(t('learn_learned'))}</span><b>${got.size}</b><span> / ${LEARN.length}</span></div></div>`;
+    h += '<div class="mage-learn-tabs">' + LEARN_CATS.map(c => {
+        const on = L.cat === c;
+        return `<button type="button" class="mage-ltab${on ? ' on' : ''}" data-mage-learn-cat="${c}" aria-pressed="${on}" style="--mage-fam:${catCol(c)}"><span class="mage-ell">${esc(t(`learn_c_${c}`))}</span></button>`;
+    }).join('') + '</div>';
+    h += '<div class="mage-sgrid">' + LEARN.filter(e => L.cat === 'all' || learnCat(e) === L.cat).map(e => {
+        const has = got.has(e.id), on = !has && L.picked.includes(e.id), foc = L.focus === e.id;
+        const fam = SPELLS[e.spell].family;
+        const cls = ['mage-slot', has && 'has', on && 'on', foc && 'focus'].filter(Boolean).join(' ');
+        return `<button type="button" class="${cls}" data-mage-learn-slot="${e.id}" aria-pressed="${on}" aria-label="${esc(learnName(e))}" style="--mage-fam:${famCol(fam)}">`
+            + `<span class="mage-slot-box"><span class="mage-slot-ico">${iconSvg(SPELLS[e.spell].icon, { size: 20 })}</span>`
+            + (has ? `<span class="mage-slot-has">${esc(t('learn_learned'))}</span>` : '') + (on ? sealHtml() : '') + '</span>'
+            + `<span class="mage-slot-name">${esc(learnName(e))}</span></button>`;
+    }).join('') + '</div>';
+    return h;
+}
+
+function learnFoot() {
+    const L = ui.learn;
+    const e = LEARN.find(x => x.id === L.focus) || LEARN[0];
+    const spec = learnSpec(e);
+    const has = learnedIds(settings().book).has(e.id), on = L.picked.includes(e.id);
+    const fam = SPELLS[e.spell].family;
+    const dur = Number(spec.duration) > 0 ? t('learn_turns', { n: spec.duration }) : t('learn_until');
+    const cost = rulesOn() ? `<span class="mage-learn-cost">◆ <b>${costOf(spec.spell, spec.duration)}</b></span>` : '';
+    const st = has ? ['has', t('learn_st_has')] : on ? ['on', t('learn_st_on')] : ['off', t('learn_st_off')];
+    const n = L.picked.length;
+    const count = esc(t('learn_to_n', { n: '\u0001' })).replace('\u0001', `<b>${n}</b>`);
+    return `<div class="mage-learn-foot"><div class="mage-learn-detail" style="--mage-fam:${famCol(fam)}">`
+        + `<div class="mage-learn-big">${framedIcon(SPELLS[e.spell].icon, { skin: settings().skin, curse: isCurse(spec), size: 52 })}</div>`
+        + `<div class="mage-learn-info"><div class="mage-learn-name"><b class="mage-ell">${esc(learnName(e))}</b><span class="mage-learn-fam">${esc(e.special ? t('learn_special') : famName(fam))}</span></div>`
+        + `<div class="mage-learn-meta"><span>${esc(t('learn_when'))} <b>${esc(timingLabel(spec))}</b></span><span>${esc(t('learn_dur'))} <b>${esc(dur)}</b></span>${cost}</div>`
+        + `<div class="mage-learn-desc">${esc(describeSpec(spec))}</div><div class="mage-learn-st mage-learn-st-${st[0]}">${esc(st[1])}</div></div></div>`
+        + `<div class="mage-learn-bar"><span class="mage-learn-n mage-ell">${n ? count : esc(t('learn_none'))}</span>`
+        + `<button type="button" class="mage-btn mage-small" data-mage-learn-clear${n ? '' : ' disabled'}><span class="mage-ell">${esc(t('learn_clear'))}</span></button>`
+        + `<button type="button" class="mage-btn mage-primary" data-mage-learn-go${n ? '' : ' disabled'}><span class="mage-ell">${esc(t('learn_go'))}</span></button></div></div>`;
+}
+
+function tapSlot(id) {
+    const L = ui.learn;
+    const has = learnedIds(settings().book).has(id);
+    if (L.focus !== id) L.focus = id;
+    else if (!has) L.picked = L.picked.includes(id) ? L.picked.filter(x => x !== id) : [...L.picked, id];
+    rerender();
+}
+
+function doLearn() {
+    const s = settings();
+    const got = learnedIds(s.book);
+    const pick = LEARN.filter(e => ui.learn.picked.includes(e.id) && !got.has(e.id));
+    if (!pick.length) return;
+    const cards = pick.map(e => ({ id: uid('c'), name: learnName(e), spec: learnSpec(e), seed: e.id }));
+    s.book.unshift(...cards);
+    save();
+    ui.bookNew = new Set(cards.map(c => c.id));
+    ui.learnedN = cards.length;
+    ui.learn = null;
+    renderWindow();
+}
+
+/** Clicks on the Learn screen and the Spellbook's new parts. */
+function learnClick(q) {
+    let el;
+    if (q('[data-mage-learn-open]')) { openLearn(); return true; }
+    if (q('[data-mage-learn-note-x]')) { ui.learnedN = 0; rerender(); return true; }
+    if (!ui.learn) return false;
+    if (q('[data-mage-learn-back]')) { ui.learn = null; renderWindow(); return true; }
+    if ((el = q('[data-mage-learn-cat]'))) { ui.learn.cat = el.dataset.mageLearnCat; renderWindow(); return true; }
+    if ((el = q('[data-mage-learn-slot]'))) { tapSlot(el.dataset.mageLearnSlot); return true; }
+    if (q('[data-mage-learn-clear]')) { ui.learn.picked = []; rerender(); return true; }
+    if (q('[data-mage-learn-go]')) { doLearn(); return true; }
+    return false;
 }
 
 // ---------- actions ----------
@@ -1694,6 +1816,9 @@ function onWinClick(e) {
         if (el.closest('.mage-head')) return;
         ui.view = el.dataset.mageView;
         ui.loadEdit = null;
+        ui.learn = null;
+        ui.bookNew = null;
+        ui.learnedN = 0;
         ui.casterImport = false;
         if (ui.view !== 'cast') ui.editCard = null;
         if (ui.view === 'cast' && (!ui.draft || ui.editCard !== null)) { ui.editCard = null; ui.draft = newDraft(); }
@@ -1702,6 +1827,7 @@ function onWinClick(e) {
         return place();
     }
     if (ui.view === 'casters' && casterClick(q)) return;
+    if (ui.view === 'book' && learnClick(q)) return;
     if ((el = q('[data-mage-toggle]'))) {
         const id = el.dataset.mageToggle;
         if (ui.opened.has(id)) ui.opened.delete(id); else ui.opened.add(id);

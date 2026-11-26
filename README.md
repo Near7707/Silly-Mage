@@ -45,6 +45,7 @@ You can just type "she turned into a cat" and the AI will play along. A few turn
 3. **🎲 Cause** asks the AI for a cause that ties into the recent story. You see it first and choose whether to use it.
 4. The **status bar above the input box** shows active effects. When the condition happens in the story, press its button. Press **↶** to undo the last press. Each chip shows the target's picture (character card or persona image); a spell cast on two people at once shares one chip.
 5. Press **⌃** to open the status window. It can be dragged by its title bar, folded, and it remembers where you put it.
+6. **Spellbook** keeps casts you use often as cards; **Load** fills the Cast tab in one tap. A new Spellbook starts empty: open **Learn spells** to pick from 26 example cards, skill-menu style. Tap a spell to see it, tap again to add it to your list, then **Learn**. Spells already in your book are marked **Learned**.
 
 ### Turns, swipes and deletes
 

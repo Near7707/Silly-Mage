@@ -90,6 +90,7 @@ export function computeTheme() {
         '--mage-danger': rgb(danger),
         '--mage-danger-bg': rgb(dangerBg),
         '--mage-scheme': dark ? 'dark' : 'light',
+        '--mage-gold': dark ? 'rgb(214, 176, 84)' : 'rgb(128, 92, 12)',
     };
 }
 
@@ -99,13 +100,13 @@ const SKINS = {
         '--mage-bg': 'rgb(236, 221, 186)', '--mage-text': 'rgb(43, 29, 16)', '--mage-muted': 'rgb(98, 72, 46)',
         '--mage-surface': 'rgb(228, 209, 168)', '--mage-surface2': 'rgb(216, 193, 148)', '--mage-border': 'rgb(140, 52, 38)',
         '--mage-accent': 'rgb(140, 36, 28)', '--mage-on-accent': 'rgb(255, 246, 228)', '--mage-danger': 'rgb(150, 28, 22)',
-        '--mage-danger-bg': 'rgb(150, 28, 22)', '--mage-scheme': 'light', '--mage-cover': 'rgb(92, 52, 28)', '--mage-gilt': 'rgb(201, 162, 74)',
+        '--mage-danger-bg': 'rgb(150, 28, 22)', '--mage-scheme': 'light', '--mage-cover': 'rgb(92, 52, 28)', '--mage-gilt': 'rgb(201, 162, 74)', '--mage-gold': 'rgb(128, 92, 12)',
     },
     cursed: {
         '--mage-bg': 'rgb(38, 30, 30)', '--mage-text': 'rgb(232, 218, 208)', '--mage-muted': 'rgb(184, 160, 150)',
         '--mage-surface': 'rgb(50, 38, 38)', '--mage-surface2': 'rgb(64, 46, 46)', '--mage-border': 'rgb(122, 36, 36)',
         '--mage-accent': 'rgb(196, 52, 52)', '--mage-on-accent': 'rgb(255, 240, 236)', '--mage-danger': 'rgb(255, 120, 110)',
-        '--mage-danger-bg': 'rgb(150, 30, 30)', '--mage-scheme': 'dark', '--mage-cover': 'rgb(20, 16, 16)', '--mage-gilt': 'rgb(140, 140, 146)',
+        '--mage-danger-bg': 'rgb(150, 30, 30)', '--mage-scheme': 'dark', '--mage-cover': 'rgb(20, 16, 16)', '--mage-gilt': 'rgb(140, 140, 146)', '--mage-gold': 'rgb(214, 176, 84)',
     },
 };
 

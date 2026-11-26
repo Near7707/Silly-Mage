@@ -537,3 +537,103 @@
 .mage-log-counter .mage-log-ico { color: #4f8fe0; }
 .mage-log-unknown { opacity: .85; font-style: italic; }
 .mage-log-more { font-size: 11.5px; opacity: .75; min-height: 22px; }
+
+/* ---------- Spellbook: Learn spells (0.9.0) ---------- */
+.mage-foot[hidden] { display: none; }
+.mage-kicker { font-size: 10.5px; letter-spacing: .3em; color: var(--mage-muted); white-space: nowrap; }
+.mage-seal {
+    position: absolute; display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border-radius: 50%;
+    background: var(--mage-accent); color: var(--mage-on-accent); font-family: var(--mage-serif); font-weight: 900; font-size: 15px;
+    box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--mage-accent) 70%, #fff), 0 1px 3px rgba(0, 0, 0, .4); transform: rotate(-12deg);
+}
+/* empty book */
+.mage-book-empty { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 18px 14px; }
+.mage-book-empty p { margin: 0 0 4px; font-size: 13.5px; line-height: 1.5; }
+.mage-book-empty .mage-btn { max-width: 300px; }
+.mage-book-empty-t { font-family: var(--mage-serif); font-weight: 800; font-size: 18px; color: var(--mage-text); }
+.mage-fan { position: relative; width: 190px; height: 140px; margin-bottom: 4px; }
+.mage-fan-card {
+    position: absolute; left: 56px; top: 8px; width: 78px; height: 114px; box-sizing: border-box; border-radius: 6px;
+    border: 2px solid var(--mage-fam); background: var(--mage-surface); transform-origin: 50% 100%;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, .22);
+}
+.mage-fan-l { transform: translateX(-32px) rotate(-15deg); background-image: repeating-linear-gradient(45deg, transparent 0 7px, color-mix(in srgb, var(--mage-fam) 22%, transparent) 7px 8px); }
+.mage-fan-r { transform: translateX(32px) rotate(15deg); background-image: repeating-linear-gradient(-45deg, transparent 0 7px, color-mix(in srgb, var(--mage-fam) 22%, transparent) 7px 8px); }
+.mage-fan-c { top: 0; display: flex; align-items: center; justify-content: center; color: var(--mage-fam); background: var(--mage-surface2); box-shadow: 0 8px 16px rgba(0, 0, 0, .3); }
+.mage-fan-c .mage-seal { right: -11px; bottom: -11px; width: 34px; height: 34px; }
+/* learned note + NEW ribbon */
+.mage-learn-note { display: flex; align-items: center; gap: 10px; margin: 0 0 8px; padding: 4px 4px 4px 10px; border-radius: 8px; background: var(--mage-text); color: var(--mage-bg); font-size: 13px; }
+.mage-learn-note .mage-seal { position: relative; flex: 0 0 auto; width: 22px; height: 22px; }
+.mage-learn-note > .mage-ell { flex: 1 1 auto; min-width: 0; }
+.mage-learn-note .mage-btn { background: transparent; border: 0; color: var(--mage-bg); width: 32px; }
+.mage-bcard { position: relative; overflow: hidden; }
+.mage-bcard-new { border: 2px solid var(--mage-gold) !important; box-shadow: 0 0 0 3px color-mix(in srgb, var(--mage-gold) 20%, transparent); }
+.mage-ribbon {
+    position: absolute; top: 10px; right: -30px; width: 104px; transform: rotate(38deg); text-align: center; pointer-events: none;
+    background: var(--mage-gold); color: var(--mage-bg); font-size: 10.5px; font-weight: 800; letter-spacing: .2em; line-height: 18px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, .3);
+}
+.mage-bcard-new .mage-bcard-top { padding-right: 46px; }
+/* learn screen */
+.mage-learn-head { display: flex; align-items: center; gap: 8px; margin: -2px 0 6px; }
+.mage-learn-head .mage-icon-btn { width: 32px; font-size: 20px; }
+.mage-learn-ttl { flex: 1 1 auto; min-width: 0; }
+.mage-learn-title { font-family: var(--mage-serif); font-weight: 900; font-size: 18px; line-height: 1.15; }
+.mage-learn-count { flex: 0 0 auto; display: flex; align-items: baseline; gap: 4px; font-size: 11.5px; color: var(--mage-muted); white-space: nowrap; }
+.mage-learn-count b { font-family: var(--mage-serif); font-size: 19px; color: var(--mage-gold); }
+.mage-learn-tabs { display: flex; margin: 0 0 12px; border-bottom: 2px solid var(--mage-border); }
+.mage-ltab {
+    flex: 1 1 0; min-width: 0; height: 34px; padding: 0 2px; margin-bottom: -2px; cursor: pointer; background: transparent; border: 0;
+    border-bottom: 3px solid transparent; color: var(--mage-muted); font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; touch-action: manipulation;
+}
+.mage-ltab.on { color: var(--mage-fam); border-bottom-color: var(--mage-fam); font-weight: 800; }
+.mage-sgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(62px, 1fr)); gap: 12px 6px; }
+.mage-slot {
+    display: flex; flex-direction: column; align-items: center; gap: 5px; min-width: 0; padding: 0; background: none; border: 0; cursor: pointer;
+    color: var(--mage-text); touch-action: manipulation; -webkit-touch-callout: none; user-select: none; -webkit-tap-highlight-color: transparent;
+}
+.mage-slot-box {
+    position: relative; display: flex; align-items: center; justify-content: center; width: 54px; height: 54px; box-sizing: border-box;
+    border-radius: 8px; border: 2px solid var(--mage-border); background: var(--mage-surface);
+    box-shadow: inset 0 -3px 0 rgba(0, 0, 0, .12); transition: transform .15s, box-shadow .15s;
+}
+.mage-slot-ico {
+    display: flex; align-items: center; justify-content: center; width: 38px; height: 38px; border-radius: 50%;
+    border: 1.5px solid var(--mage-fam); color: var(--mage-fam); background: color-mix(in srgb, var(--mage-fam) 14%, transparent);
+}
+.mage-slot-name {
+    max-width: 100%; min-height: 2.5em; font-size: 10.5px; letter-spacing: -.15px; line-height: 1.25; text-align: center; overflow: hidden; overflow-wrap: break-word; hyphens: auto;
+    display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
+}
+.mage-slot.has .mage-slot-ico { opacity: .5; }
+.mage-slot-has {
+    position: absolute; left: -2px; right: -2px; bottom: -2px; border-radius: 0 0 7px 7px; background: var(--mage-gold); color: var(--mage-bg);
+    font-size: 9.5px; font-weight: 800; line-height: 14px; text-align: center; letter-spacing: .05em; white-space: nowrap; overflow: hidden;
+}
+.mage-slot.on .mage-slot-box { border-color: var(--mage-accent); box-shadow: 0 0 9px color-mix(in srgb, var(--mage-accent) 45%, transparent); }
+.mage-slot .mage-seal { top: -7px; right: -7px; }
+.mage-slot.focus .mage-slot-box { border-color: var(--mage-gold); transform: scale(1.06); box-shadow: 0 0 0 3px color-mix(in srgb, var(--mage-gold) 35%, transparent), 0 0 12px color-mix(in srgb, var(--mage-gold) 55%, transparent); }
+.mage-slot.focus .mage-slot-name { font-weight: 800; }
+.mage-slot:focus-visible { outline: 2px solid var(--mage-accent); outline-offset: 2px; border-radius: 8px; }
+.mage-learn-foot { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.mage-learn-detail { display: flex; gap: 10px; min-width: 0; }
+.mage-learn-big {
+    flex: 0 0 auto; width: 60px; height: 60px; display: flex; align-items: center; justify-content: center; border-radius: 8px; color: var(--mage-fam);
+    border: 2px solid var(--mage-gold); box-shadow: inset 0 0 0 3px var(--mage-bg), inset 0 0 0 4px var(--mage-border);
+}
+.mage-learn-info { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.mage-learn-name { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+.mage-learn-name b { font-family: var(--mage-serif); font-size: 16px; min-width: 0; }
+.mage-learn-fam { flex: 0 0 auto; font-size: 11.5px; font-weight: 700; color: var(--mage-fam); }
+.mage-learn-meta { display: flex; flex-wrap: wrap; gap: 2px 10px; font-size: 12px; color: var(--mage-muted); }
+.mage-learn-meta b { color: var(--mage-text); }
+.mage-learn-cost b { color: var(--mage-text); }
+.mage-learn-desc { font-size: 12.5px; line-height: 1.4; max-height: 4.2em; overflow-y: auto; }
+.mage-learn-st { font-size: 11.5px; font-weight: 700; color: var(--mage-muted); }
+.mage-learn-st-on { color: var(--mage-accent); }
+.mage-learn-st-has { color: var(--mage-gold); }
+.mage-learn-bar { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.mage-learn-n { flex: 1 1 auto; min-width: 0; font-size: 13px; }
+.mage-learn-n b { font-family: var(--mage-serif); font-size: 17px; color: var(--mage-accent); }
+.mage-learn-bar .mage-btn { flex: 0 0 auto; }
+.mage-learn-bar .mage-primary { min-width: 96px; font-family: var(--mage-serif); }

@@ -7,7 +7,7 @@ import { FORMS, SPELL_ORDER } from './spells.js';
 import { getProfiles } from './ai.js';
 import { resetPos } from './win.js';
 
-export const VERSION = '0.8.0';
+export const VERSION = '0.9.0';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const toast = (kind, msg) => { try { globalThis.toastr?.[kind]?.(msg, 'Mage'); } catch { /* ignore */ } };

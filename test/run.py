@@ -95,6 +95,21 @@ def set_pref(page, key, value):
     page.wait_for_timeout(80)
 
 
+
+def learn(page, ids):
+    """Learn example spells into the Spellbook (0.9.0): focus a slot, tap again to pick, then Learn."""
+    open_win(page)
+    page.click('[data-mage-view="book"]')
+    page.click('[data-mage-learn-open]')
+    for i in ids:
+        sel = f'[data-mage-learn-slot="{i}"]'
+        if page.get_attribute(sel, 'aria-pressed') != 'true':
+            page.click(sel)
+        if page.get_attribute(sel, 'aria-pressed') != 'true':
+            page.click(sel)
+    page.click('[data-mage-learn-go]')
+
+
 def flair(browser):
     print('15. Flair: block, sensing, delayed spells, misfire / critical, record cards, long chat')
     page, errors = open_page(browser, 'fresh', 390, 844)
@@ -497,6 +512,123 @@ def spells_080(browser):
     page.close()
 
 
+
+def learn_090(browser):
+    print('17. 0.9.0 Learn spells: empty book, skill menu, learn, NEW, learned marks, rules cost, old books, Korean, skins')
+    page, errors = open_page(browser, 'fresh', 390, 844)
+    open_win(page); page.click('[data-mage-view="book"]')
+    check(page.is_visible('.mage-book-empty'), 'a new Spellbook starts empty with the fanned cards')
+    check(not page.is_visible('#mage_win .mage-foot'), 'empty book: no footer')
+    check('Learn spells · 26' in page.inner_text('[data-mage-learn-open]'), 'empty book: "Learn spells · 26" button')
+    page.click('[data-mage-learn-open]')
+    check(page.locator('.mage-slot').count() == 26, '26 example spells')
+    check('0' in page.inner_text('.mage-learn-count b'), 'learned count 0')
+    check(page.get_attribute('.mage-slot.focus', 'data-mage-learn-slot') == 'water', 'first unlearned spell is in focus')
+    check(page.locator('.mage-learn-cost').count() == 0, 'rules off: no mana cost')
+    check(page.is_disabled('[data-mage-learn-go]'), 'Learn is off with nothing picked')
+    page.click('[data-mage-learn-slot="water"]')
+    check(page.get_attribute('[data-mage-learn-slot="water"]', 'aria-pressed') == 'true', 'tapping the focused slot picks it')
+    page.click('[data-mage-learn-slot="moon"]')
+    check(page.get_attribute('[data-mage-learn-slot="moon"]', 'aria-pressed') == 'false', 'first tap on another slot only focuses it')
+    check('Curse of the Full Moon' in page.inner_text('.mage-learn-detail'), 'detail shows the focused spell')
+    check('the moon rises' in page.inner_text('.mage-learn-desc'), 'detail describes the card as it will be saved')
+    page.click('[data-mage-learn-slot="moon"]')
+    check('To learn: 2' in page.inner_text('.mage-learn-n'), 'two picked')
+    page.click('[data-mage-learn-cat="special"]')
+    check(page.locator('.mage-slot').count() == 3, 'Special tab: 3 cards')
+    page.click('[data-mage-learn-cat="all"]')
+    page.click('[data-mage-learn-clear]')
+    check(page.is_disabled('[data-mage-learn-go]'), 'Clear empties the list')
+    page.screenshot(path=os.path.join(SHOTS, 'learn_en.png'))
+    page.click('[data-mage-learn-back]')
+    check(page.is_visible('.mage-book-empty'), 'back returns to the book')
+    learn(page, ['water', 'masque', 'snail', 'lips', 'moon', 'drowsy'])
+    m = page.evaluate('window.__fakeST.ctx.extensionSettings.mage')
+    names = [c['name'] for c in m['book']]
+    check(names == ['Curse of Water', "Snail's Pace", 'Drowsy Cloud', 'Masquerade', 'Sealed Lips', 'Curse of the Full Moon'], f'learned in list order {names}')
+    check(all(c.get('seed') for c in m['book']), 'learned cards remember where they came from')
+    check(page.locator('.mage-ribbon').count() == 6, 'NEW ribbons on the learned cards')
+    check('Learned 6 spells' in page.inner_text('.mage-learn-note'), 'learned note')
+    check(page.locator('#mage_win .mage-foot [data-mage-learn-open]').count() == 1 and page.locator('#mage_win .mage-foot [data-mage-card-new]').count() == 1, 'book footer: Learn spells + New card')
+    page.screenshot(path=os.path.join(SHOTS, 'learn_after_en.png'))
+    page.click('[data-mage-learn-note-x]')
+    check(page.locator('.mage-learn-note').count() == 0, 'note closes')
+    # learned cards cast fine
+    def load(name):
+        open_win(page); page.click('[data-mage-view="book"]')
+        i = [c['name'] for c in page.evaluate('window.__fakeST.ctx.extensionSettings.mage')['book']].index(name)
+        page.locator('.mage-bcard [data-mage-card-load]').nth(i).click()
+        page.select_option('[data-f="target"]', 'user')
+        page.click('[data-mage-cast]')
+    load('Masquerade'); turn(page)
+    check('jeweled mask' in prompt(page), 'Masquerade casts with its look')
+    load("Snail's Pace"); turn(page)
+    check('slowed down' in prompt(page) or 'Slow' in prompt(page), "Snail's Pace casts Slow")
+    load('Sealed Lips'); turn(page)
+    check('secret' in prompt(page), 'Sealed Lips keeps its ending secret')
+    load('Curse of the Full Moon')
+    check(page.evaluate("Object.values(window.__fakeST.ctx.extensionSettings.mage.chats)[0].effects.some(e => e.omen && e.trigger.kind === 'condition')"), 'Full Moon waits for its condition with an omen')
+    # leaving the book drops the NEW marks
+    page.click('[data-mage-view="status"]'); page.click('[data-mage-view="book"]')
+    check(page.locator('.mage-ribbon').count() == 0, 'NEW goes away after leaving the book')
+    page.click('#mage_win .mage-foot [data-mage-learn-open]')
+    check('6' in page.inner_text('.mage-learn-count b'), 'learned count 6')
+    check('has' in page.get_attribute('[data-mage-learn-slot="water"]', 'class'), 'learned slot is marked')
+    page.click('[data-mage-learn-slot="water"]'); page.click('[data-mage-learn-slot="water"]')
+    check(page.get_attribute('[data-mage-learn-slot="water"]', 'aria-pressed') == 'false', 'a learned spell cannot be picked again')
+    check('Already learned' in page.inner_text('.mage-learn-st'), 'detail says already learned')
+    rules_on(page)
+    page.click('[data-mage-view="status"]'); page.click('[data-mage-view="book"]'); page.click('#mage_win .mage-foot [data-mage-learn-open]')
+    check('◆ 3' in page.inner_text('.mage-learn-cost'), 'rules on: mana cost shows (◆3 for Change)')
+    # layout
+    tall = page.evaluate("""[...document.querySelectorAll('#mage_win button')].filter(b => b.offsetParent && !b.classList.contains('mage-slot') && b.getBoundingClientRect().height > 44).map(b => b.className)""")
+    check(not tall, f'learn: no tall buttons {tall[:3]}')
+    bh = page.evaluate("document.querySelector('#mage_win .mage-body').getBoundingClientRect().height")
+    check(bh > 200, f'learn: grid keeps room ({bh:.0f}px)')
+    cut = page.evaluate("""[...document.querySelectorAll('.mage-slot-name')].filter(n => n.scrollWidth > n.clientWidth + 1).length""")
+    print(f'      (names shortened with …: {cut})')
+    check(not errors, f'no errors ({errors[:3]})')
+    page.close()
+
+    # An old book (seeded before 0.9.0) keeps its cards; same-named examples count as learned.
+    page, errors = open_page(browser, 'fresh', 390, 844)
+    page.evaluate("""(() => { const s = window.__fakeST.ctx.extensionSettings.mage; s.bookSeeded = true;
+        s.book = [{ id: 'c1', name: 'Turtle Prank', spec: { spell: 'polymorph', form: { id: 'turtle' }, duration: 3, method: '', trigger: { kind: 'now' }, release: { kind: 'time', text: '' }, source: { kind: 'unknown', name: '' } } },
+                  { id: 'c2', name: '주머니 크기', spec: { spell: 'mite', duration: 5, method: '', trigger: { kind: 'now' }, release: { kind: 'time', text: '' }, source: { kind: 'unknown', name: '' } } }]; })()""")
+    open_win(page); page.click('[data-mage-view="book"]')
+    check(page.locator('.mage-bcard').count() == 2, 'old book keeps its cards')
+    page.click('#mage_win .mage-foot [data-mage-learn-open]')
+    check('has' in page.get_attribute('[data-mage-learn-slot="turtle"]', 'class') and 'has' in page.get_attribute('[data-mage-learn-slot="pocket"]', 'class'), 'old cards with an example name (either language) count as learned')
+    check(not errors, f'old book: no errors ({errors[:3]})')
+    page.close()
+
+    # Korean + skins
+    for skin, theme in [('theme', 'dark'), ('theme', 'light'), ('tome', 'light'), ('cursed', 'dark')]:
+        for lang in ['ko', 'en']:
+            page, errors = open_page(browser, f'fresh&lang={lang}&theme={theme}', 390, 844)
+            page.evaluate(f"window.__fakeST.ctx.extensionSettings.mage.skin = '{skin}'")
+            open_win(page); page.click('[data-mage-view="book"]')
+            if lang == 'ko':
+                check('주문 습득 · 26' in page.inner_text('[data-mage-learn-open]'), f'{skin}/{theme}: Korean empty book button')
+            page.screenshot(path=os.path.join(SHOTS, f'learn_empty_{skin}_{theme}_{lang}.png'))
+            page.click('[data-mage-learn-open]')
+            page.click('[data-mage-learn-slot="water"]')
+            page.click('[data-mage-learn-slot="crush"]'); page.click('[data-mage-learn-slot="crush"]')
+            if lang == 'ko':
+                check('첫눈에 반함' in page.inner_text('.mage-learn-detail') and '배울 주문 2개' in page.inner_text('.mage-learn-n'), f'{skin}/{theme}: Korean learn screen')
+            tall = page.evaluate("""[...document.querySelectorAll('#mage_win button')].filter(b => b.offsetParent && !b.classList.contains('mage-slot') && b.getBoundingClientRect().height > 44).map(b => b.className)""")
+            check(not tall, f'{skin}/{theme}/{lang}: no tall buttons {tall[:3]}')
+            inside = page.evaluate("""(() => { const r = document.getElementById('mage_win').getBoundingClientRect(); return r.left >= 0 && r.top >= 0 && r.right <= innerWidth + 0.5 && r.bottom <= innerHeight + 0.5; })()""")
+            check(inside, f'{skin}/{theme}/{lang}: window inside the screen')
+            page.screenshot(path=os.path.join(SHOTS, f'learn_{skin}_{theme}_{lang}.png'))
+            page.click('[data-mage-learn-go]')
+            if lang == 'ko':
+                names = [c['name'] for c in page.evaluate('window.__fakeST.ctx.extensionSettings.mage')['book']]
+                check(names == ['물의 저주', '첫눈에 반함'], f'Korean cards {names}')
+            page.screenshot(path=os.path.join(SHOTS, f'learn_after_{skin}_{theme}_{lang}.png'))
+            check(not errors, f'{skin}/{theme}/{lang}: no errors ({errors[:2]})')
+            page.close()
+
 def main():
     server = subprocess.Popen([sys.executable, os.path.join(HERE, 'server.py'), str(PORT)])
     time.sleep(0.8)
@@ -540,8 +672,7 @@ def main():
 
             print('2. Stacked curse: stages, undo, swipe cancels a judgment, Dispel + undo')
             page, errors = open_page(browser)
-            open_win(page)
-            page.click('[data-mage-view="book"]')
+            learn(page, ['water'])
             page.click('.mage-bcard [data-mage-card-load]')  # Curse of Water
             page.click('[data-mage-cast]')
             turn(page)
@@ -632,8 +763,7 @@ def main():
                         for lang in ['en', 'ko']:
                             page, errors = open_page(browser, f'fresh&lang={lang}&theme={theme}', w, h)
                             page.evaluate(f"(() => {{ const s = window.__fakeST.ctx.extensionSettings.mage; s.skin = '{skin}'; }})()")
-                            page.evaluate("document.querySelector('#mage_wand').click()")
-                            page.click('[data-mage-view="book"]')
+                            learn(page, ['water'])
                             page.click('.mage-bcard [data-mage-card-load]')
                             page.click('[data-mage-cast]')
                             turn(page)
@@ -1231,6 +1361,7 @@ def main():
 
             flair(browser)
             spells_080(browser)
+            learn_090(browser)
             browser.close()
     finally:
         server.terminate()
