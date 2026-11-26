@@ -2,7 +2,7 @@
 // English lines for the AI.
 
 import { ctx, settings } from './store.js';
-import { FORMS, formById, SIZE, STAGES, STAGE_MAX } from './spells.js';
+import { FORMS, formById, SIZE, STAGES, STAGE_MAX, SIMPLE } from './spells.js';
 
 export function targetName(target) {
     if (!target) return '?';
@@ -34,8 +34,15 @@ export function formText(e, lang) {
 
 const fill = (tpl, form) => String(tpl).replaceAll('{form}', form);
 
+const fillX = (str, e) => (str == null ? null : String(str).replaceAll('{x}', String(e.x || '?')));
+
 /** Current look and abilities, in a language. */
 export function stateText(e, v, lang) {
+    const def = SIMPLE[e.spell];
+    if (def) {
+        const eff = e.variant === 'bad' && def.effectBad ? def.effectBad : def.effect;
+        return { look: fillX(eff[lang], e), can: def.can ? fillX(def.can[lang], e) : null, cannot: def.cannot ? fillX(def.cannot[lang], e) : null };
+    }
     if (e.spell === 'titan' || e.spell === 'mite') {
         const s = SIZE[e.spell];
         return { look: s.look[lang], can: s.can[lang], cannot: s.cannot[lang] };
@@ -50,7 +57,12 @@ export function stateText(e, v, lang) {
     return { look: form.name, can: form.can, cannot: form.cannot };
 }
 
-const SPELL_EN = { polymorph: 'Polymorph', titan: 'Titan', mite: 'Mite', dispel: 'Dispel' };
+const SPELL_EN = {
+    polymorph: 'Polymorph', titan: 'Titan', mite: 'Mite', dispel: 'Dispel', levitate: 'Levitate', truth: 'Truth',
+    reverse: 'Reverse', charm: 'Charm', fear: 'Fear', sleep: 'Sleep', glamour: 'Glamour', invisibility: 'Invisibility', luck: 'Luck',
+};
+const nameEn = (e) => (e.spell === 'luck' && e.variant === 'bad' ? 'Jinx' : SPELL_EN[e.spell] || e.spell);
+const fillWho = (str, who, e) => fillX(String(str).replaceAll('{who}', who), e);
 
 function sourceEn(src) {
     if (!src) return '';
@@ -98,13 +110,14 @@ export function ongoingLine(v) {
     } else if (e.spell === 'polymorph') {
         parts.push(`${who} — Polymorph: is a ${s.look} (mind and memories unchanged).`);
     } else {
-        parts.push(`${who} — ${SPELL_EN[e.spell]}: ${s.look}.`);
+        parts.push(`${who} — ${nameEn(e)}: ${s.look}.`);
     }
     if (s.can) parts.push(`Can: ${s.can}.`);
     if (s.cannot) parts.push(`Cannot: ${s.cannot}.`);
     if (e.duration > 0) parts.push(`${v.left} turn${v.left === 1 ? '' : 's'} left.`);
     else parts.push(`No time limit; ends only when ${releaseEn(e, who)}.`);
     if (e.duration > 0 && e.release?.kind && e.release.kind !== 'dispel') parts.push(`Ends early if ${releaseEn(e, who)}.`);
+    if (SIMPLE[e.spell]?.breaker) parts.push(SIMPLE[e.spell].breaker.rule.en);
     const src = sourceEn(e.source);
     const cause = String(e.cause || '').trim();
     const why = [src && `from ${src}`, cause].filter(Boolean).join(' — ');
@@ -119,9 +132,13 @@ export function justNotes(v, world) {
     const who = targetName(e.target);
     const react = REACT[world] || REACT.rare;
     const notes = [];
+    const def = SIMPLE[e.spell];
     if (v.status === 'active' && v.needCast) {
         let text;
-        if (e.method === 'stacked') {
+        if (def) {
+            text = fillWho(e.variant === 'bad' && def.startBad ? def.startBad : def.start, who, e);
+            text += def.react ? ` Write it in this reply. ${react}` : ' Write it in this reply.';
+        } else if (e.method === 'stacked') {
             text = `A curse was just placed on ${who}. Show at most a faint sign that something happened.`;
         } else if (e.spell === 'polymorph') {
             text = `${who} has just turned into a ${formText(e, 'en').name}. Write the change in this reply. ${react}`;
@@ -140,7 +157,20 @@ export function justNotes(v, world) {
         notes.push({ text: `"${cond}" just happened to ${who}: the curse moved to stage ${n.stage}/${STAGE_MAX} — ${look}. Write this change in this reply. ${react}`,
             kind: 'stage', effectId: e.id, actionId: n.action.id });
     }
-    if (v.status === 'ended' && v.needEnd) {
+    if (v.status === 'ended' && v.needEnd && def) {
+        let text;
+        const rel = v.actions.find(a => a.type === 'judge' && a.what === 'release');
+        if (v.endReason === 'release' && def.breaker && rel?.via === 'breaker') text = fillWho(def.breaker.end, who, e);
+        else {
+            let why = 'has just worn off';
+            if (v.endReason === 'dispel') {
+                const by = v.actions.find(a => a.type === 'dispel')?.by;
+                why = by ? `was just dispelled (${by})` : 'was just dispelled';
+            } else if (v.endReason === 'release') why = `just broke (${releaseEn(e, who)})`;
+            text = `${nameEn(e)} on ${who} ${why}. ${fillWho(def.end, who, e)}`;
+        }
+        notes.push({ text: `${text} Write it in this reply.`.replace('reply. Write it in this reply.', 'reply.'), kind: 'end', effectId: e.id });
+    } else if (v.status === 'ended' && v.needEnd) {
         const name = e.method === 'stacked' ? 'The curse' : SPELL_EN[e.spell];
         let why = 'has just worn off';
         if (v.endReason === 'dispel') {

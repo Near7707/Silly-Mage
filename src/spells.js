@@ -14,12 +14,97 @@ export const FAMILIES = {
 };
 
 export const SPELLS = {
-    polymorph: { family: 'change', icon: 'polymorph', forms: true },
-    titan:     { family: 'change', icon: 'titan' },
-    mite:      { family: 'change', icon: 'mite' },
-    dispel:    { family: 'ward', icon: 'dispel', utility: true },
+    polymorph:    { family: 'change', icon: 'polymorph', forms: true },
+    titan:        { family: 'change', icon: 'titan' },
+    mite:         { family: 'change', icon: 'mite' },
+    levitate:     { family: 'change', icon: 'levitate', simple: true },
+    truth:        { family: 'mind', icon: 'truth', simple: true },
+    reverse:      { family: 'mind', icon: 'reverse', simple: true },
+    charm:        { family: 'mind', icon: 'charm', simple: true },
+    fear:         { family: 'mind', icon: 'fear', simple: true },
+    sleep:        { family: 'mind', icon: 'sleep', simple: true },
+    glamour:      { family: 'illusion', icon: 'glamour', simple: true },
+    invisibility: { family: 'illusion', icon: 'invisibility', simple: true },
+    luck:         { family: 'fate', icon: 'luck', simple: true },
+    dispel:       { family: 'ward', icon: 'dispel', utility: true },
 };
-export const SPELL_ORDER = ['polymorph', 'titan', 'mite', 'dispel'];
+export const SPELL_ORDER = ['polymorph', 'titan', 'mite', 'levitate', 'truth', 'reverse', 'charm', 'fear', 'sleep',
+    'glamour', 'invisibility', 'luck', 'dispel'];
+
+/**
+ * Spells that only change what someone can do (no new body). {who} = target name, {x} = typed
+ * detail (Glamour). `breaker`: a built-in button that ends it (Sleep: woken up, Invisibility:
+ * touched someone). `react`: whether people nearby react when it starts.
+ */
+export const SIMPLE = {
+    levitate: {
+        effect: { en: 'floats in the air, drifting gently', ko: '몸이 둥둥 뜸' },
+        can: { en: 'reach high places, cross gaps', ko: '높은 곳 가기, 틈 건너기' },
+        cannot: { en: 'stand firmly, grab things easily', ko: '땅에 서 있기, 물건 잘 잡기' },
+        start: '{who} has just started to float off the ground.',
+        end: '{who} has just drifted back down to the ground.', react: true,
+    },
+    truth: {
+        effect: { en: 'cannot lie; whatever they say comes out as the truth', ko: '거짓말을 못 함 — 하는 말이 다 진실로 나옴' },
+        can: { en: 'speak, stay silent', ko: '말하기, 입 다물기' },
+        cannot: { en: 'lie, dodge with half-truths', ko: '거짓말, 얼버무리기' },
+        start: '{who} has just been put under Truth: from this reply on, they cannot lie.',
+        end: '{who} can lie again.', react: false,
+    },
+    reverse: {
+        effect: { en: 'everything they say comes out as the opposite of what they mean', ko: '하는 말이 전부 반대로 나옴' },
+        can: { en: 'gesture, show things', ko: '몸짓, 보여 주기' },
+        cannot: { en: 'say what they really mean', ko: '하고 싶은 말 그대로 하기' },
+        start: "{who}'s words have just started coming out reversed (they say the opposite of what they mean).",
+        end: "{who}'s words come out normally again.", react: true,
+    },
+    charm: {
+        effect: { en: 'irresistibly likable; people nearby want to be kind to them and help them', ko: '호감이 쏠려 주변 사람들이 잘해 주고 도우려 함' },
+        can: { en: 'ask favors easily', ko: '부탁하기 쉬움' },
+        cannot: { en: 'make people dislike them', ko: '미움받기' },
+        start: '{who} has just become strangely charming; people nearby start treating them kindly.',
+        end: 'The charm on {who} has faded; people act normally again.', react: false,
+    },
+    fear: {
+        effect: { en: 'gripped by magical fear; avoids danger and tends to run or hide', ko: '겁에 질려 피하거나 도망치려 함' },
+        can: { en: 'run, hide', ko: '도망치기, 숨기' },
+        cannot: { en: 'stay calm, face what scares them', ko: '침착하기, 무서운 것 마주하기' },
+        start: '{who} is suddenly gripped by magical fear.',
+        end: 'The fear has left {who}.', react: true,
+    },
+    sleep: {
+        effect: { en: 'in a deep magical sleep', ko: '마법에 걸려 깊이 잠듦' },
+        can: { en: 'dream, mumble in their sleep', ko: '꿈꾸기, 잠꼬대' },
+        cannot: { en: 'move on purpose, talk, notice what happens', ko: '움직이기, 말하기, 주변 알아채기' },
+        start: '{who} has just fallen into a deep magical sleep.',
+        end: '{who} has just woken up.', react: true,
+        breaker: { label: { en: '⏰ Woken up', ko: '⏰ 깨움' }, rule: { en: 'Ends if someone wakes them.', ko: '누가 깨우면 풀림' }, end: 'Someone woke {who}: they have just woken up.' },
+    },
+    glamour: {
+        needsX: true,
+        effect: { en: 'looks like {x} to everyone (only an illusion; the body is unchanged, and it may slip)', ko: '겉모습이 {x}(으)로 보임 (환영일 뿐, 들킬 수 있음)' },
+        can: { en: 'pass as {x} at a glance', ko: '{x}인 척하기' },
+        cannot: { en: 'change their voice or habits', ko: '목소리·버릇 바꾸기' },
+        start: '{who} has just started to look like {x} to everyone (an illusion, not a real change).',
+        end: 'The illusion on {who} has fallen away; they look like themselves again.', react: false,
+    },
+    invisibility: {
+        effect: { en: 'completely unseen: no sight, sound, footsteps or scent; no one notices them at all', ko: '완전히 안 보임 — 소리·발자국·냄새도 없음' },
+        can: { en: 'move unseen, listen in', ko: '몰래 다니기, 엿듣기' },
+        cannot: { en: 'be noticed in any way', ko: '누구에게든 알아채지기' },
+        start: '{who} has just vanished completely. From now on no one can see, hear or sense them; do not write anyone noticing a presence.',
+        end: '{who} has just become visible again. Write the moment they reappear.', react: false,
+        breaker: { label: { en: '✋ Touched someone', ko: '✋ 건드림' }, rule: { en: 'Ends at once if they touch or bump into anyone.', ko: '누구를 건드리거나 부딪히면 바로 풀림' }, end: '{who} touched or bumped into someone and has just been revealed. Write the moment they appear.' },
+    },
+    luck: {
+        variants: ['good', 'bad'],
+        effect: { en: 'very lucky; things tend to work out for them', ko: '운이 좋아 일이 잘 풀림' },
+        effectBad: { en: 'jinxed; small things keep going wrong for them', ko: '자꾸 일이 꼬임' },
+        can: null, cannot: null,
+        start: '{who} has just become very lucky.', startBad: '{who} has just been jinxed.',
+        end: "{who}'s luck is back to normal.", react: false,
+    },
+};
 
 /** What a size spell does to the body. */
 export const SIZE = {

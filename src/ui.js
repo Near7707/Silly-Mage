@@ -4,7 +4,7 @@
 import { t, lang, josa } from './i18n.js';
 import { ctx, settings, save, currentChatId, uid } from './store.js';
 import {
-    FAMILIES, SPELLS, SPELL_ORDER, FORMS, formById, STAGES, STAGE_MAX, SOURCES, MOTIVES, TRIGGERS, RELEASES,
+    SIMPLE, FAMILIES, SPELLS, SPELL_ORDER, FORMS, formById, STAGES, STAGE_MAX, SOURCES, MOTIVES, TRIGGERS, RELEASES,
     VISIBILITY, DURATIONS, MAX_EFFECTS, MOTIVE_SUGGEST, RANDOM_OBJECTS, RANDOM_PLACES,
 } from './spells.js';
 import { views, shown, liveCount, cast, judge, dispel, undo, undoable, history, removeEffect } from './engine.js';
@@ -52,8 +52,15 @@ function formLabel(f, L = lang()) {
     return b ? (b.name[L] || b.name.en) : '?';
 }
 
+function simpleName(e) {
+    if (e.spell === 'luck' && e.variant === 'bad') return t('spell_jinx');
+    if (e.spell === 'glamour' && e.x) return `${spellName('glamour')} · ${e.x}`;
+    return spellName(e.spell);
+}
+
 function effectTitle(e) {
     if (e.title) return e.title;
+    if (SIMPLE[e.spell]) return simpleName(e);
     if (e.method === 'stacked') return t('curse_of', { cond: e.trigger?.text || '?' });
     if (e.spell === 'polymorph') return `${spellName('polymorph')} · ${formLabel(e.form)}`;
     return spellName(e.spell);
@@ -70,7 +77,7 @@ function isCurse(e) { return e.method === 'curse' || e.method === 'stacked'; }
 function leftText(v) {
     const e = v.e;
     if (e.surprise && e.duration > 0) return t('left_unknown');
-    if (e.duration > 0) return t('left_n', { n: v.left });
+    if (e.duration > 0) return v.left === 1 ? t('left_one') : t('left_n', { n: v.left });
     return t('left_none');
 }
 
@@ -96,7 +103,7 @@ function chipText(v) {
         if (v.stage <= 0) return `${t('curse')} 0/${STAGE_MAX}`;
         return `${STAGES[v.stage - 1].short[lang()]} ${v.stage}/${STAGE_MAX}`;
     }
-    const name = e.spell === 'polymorph' ? formLabel(e.form) : spellName(e.spell);
+    const name = e.spell === 'polymorph' ? formLabel(e.form) : (e.spell === 'luck' && e.variant === 'bad' ? t('spell_jinx') : spellName(e.spell));
     if (e.duration > 0) return `${name} ${e.surprise ? '?' : t('chip_turns', { n: v.left })}`;
     return `${name} ∞`;
 }
@@ -111,6 +118,8 @@ function condButtons(v) {
     }
     if (v.status === 'active') {
         if (e.method === 'stacked' && v.stage < STAGE_MAX) out.push({ what: 'stack', label: e.trigger?.text || t('cond') });
+        const br = SIMPLE[e.spell]?.breaker;
+        if (br) out.push({ what: 'release', via: 'breaker', label: br.label[lang()] });
         if (e.release?.kind === 'truth') out.push({ what: 'release', label: t('btn_truth') });
         if (e.release?.kind === 'action') out.push({ what: 'release', label: e.release.text || t('rel_action') });
     }
@@ -118,7 +127,7 @@ function condButtons(v) {
 }
 
 function condBtnHtml(v, b, cls = 'mage-cond') {
-    return `<button type="button" class="${cls}" data-mage-judge="${esc(v.e.id)}" data-what="${b.what}" title="${esc(t(`judge_${b.what}`))}">`
+    return `<button type="button" class="${cls}" data-mage-judge="${esc(v.e.id)}" data-what="${b.what}" data-via="${b.via || ''}" title="${esc(t(`judge_${b.what}`))}">`
         + `<span class="mage-ell">${esc(b.label)}</span></button>`;
 }
 
@@ -140,7 +149,7 @@ export function mountBar() {
 
 function onBarClick(e) {
     const j = e.target.closest('[data-mage-judge]');
-    if (j) return doJudge(j.dataset.mageJudge, j.dataset.what);
+    if (j) return doJudge(j.dataset.mageJudge, j.dataset.what, j.dataset.via);
     if (e.target.closest('[data-mage-undo]')) return doUndo();
     const o = e.target.closest('[data-mage-open]');
     if (o) {
@@ -306,6 +315,7 @@ function actionLabel(a, e) {
         return `${e.trigger?.text || t('cond')} → ${st}`;
     }
     if (a.what === 'trigger') return `${e.trigger?.text || t('cond')} → ${t('fired_short')}`;
+    if (a.via === 'breaker' && SIMPLE[e.spell]?.breaker) return `${SIMPLE[e.spell].breaker.label[lang()]} → ${t('released_short')}`;
     return `${e.release?.kind === 'truth' ? t('btn_truth') : (e.release?.text || t('rel_action'))} → ${t('released_short')}`;
 }
 
@@ -330,6 +340,12 @@ function sourceLabel(src) {
 
 function releaseLabel(e) {
     const r = e.release || { kind: 'dispel' };
+    const br = SIMPLE[e.spell]?.breaker;
+    const pre = br ? `${br.rule[lang()]} · ` : '';
+    return pre + releaseBase(r);
+}
+
+function releaseBase(r) {
     const base = r.kind === 'dispel' ? t('rel_dispel') : r.kind === 'truth' ? (r.text ? t('rel_truth_about', { x: r.text }) : t('rel_truth')) : (r.text || t('rel_action'));
     return r.kind === 'dispel' ? base : `${base} · ${t('rel_dispel')}`;
 }
@@ -526,8 +542,14 @@ function castHtml() {
             h += `<div class="mage-preview"><div><b>${esc(t('r_can'))}</b> ${esc(f.can[L])}</div><div><b>${esc(t('r_cannot'))}</b> ${esc(f.cannot[L])}</div></div>`;
         }
     } else {
-        const st = stateText({ spell: d.spell }, null, L);
-        h += `<div class="mage-preview"><div><b>${esc(t('r_can'))}</b> ${esc(st.can)}</div><div><b>${esc(t('r_cannot'))}</b> ${esc(st.cannot)}</div></div>`;
+        const def = SIMPLE[d.spell];
+        if (def?.variants) h += field(t('f_variant'), sel('variant', def.variants.map(k => [k, t(`var_${d.spell}_${k}`)]), d.variant || def.variants[0]));
+        if (def?.needsX) h += field(t(`x_${d.spell}`), `<input class="mage-input" data-f="x" maxlength="60" value="${esc(d.x || '')}" placeholder="${esc(t(`x_${d.spell}_ph`))}">`);
+        const st = stateText({ spell: d.spell, variant: d.variant, x: d.x || '…' }, null, L);
+        h += `<div class="mage-preview">${def ? `<div>${esc(st.look)}</div>` : ''}`
+            + (st.can ? `<div><b>${esc(t('r_can'))}</b> ${esc(st.can)}</div>` : '')
+            + (st.cannot ? `<div><b>${esc(t('r_cannot'))}</b> ${esc(st.cannot)}</div>` : '')
+            + (def?.breaker ? `<div><b>${esc(t('r_release'))}</b> ${esc(def.breaker.rule[L])}</div>` : '') + '</div>';
     }
 
     const durBtns = DURATIONS.map(n => `<button type="button" class="mage-seg${Number(d.duration) === n ? ' on' : ''}" data-mage-dur="${n}">${esc(n ? t('dur_n', { n }) : t('dur_none'))}</button>`).join('');
@@ -632,6 +654,11 @@ export function describeSpec(d, L = lang()) {
     } else if (d.spell === 'polymorph') s = ko ? `대상을 ${form}${josa(form, '으로/로')} 바꾼다.` : `Turns the target into a ${form}.`;
     else if (d.spell === 'titan') s = ko ? '대상의 키를 두 배로 키운다.' : 'Makes the target grow to twice their height.';
     else if (d.spell === 'mite') s = ko ? '대상을 손바닥만 하게 줄인다.' : 'Shrinks the target to palm size.';
+    else if (d.spell === 'glamour') {
+        const x = d.x || '?';
+        s = ko ? `대상의 겉모습을 ${x}${josa(x, '으로/로')} 보이게 한다.` : `Makes the target look like ${x}.`;
+    } else if (d.spell === 'luck' && d.variant === 'bad') s = ko ? '대상의 일이 자꾸 꼬인다.' : 'Things keep going wrong for the target.';
+    else if (SIMPLE[d.spell]) s = t(`desc_${d.spell}`);
     if (d.method !== 'stacked') {
         const tr = d.trigger || {};
         if (d.method === 'curse' || tr.kind === 'condition') s += ko ? ` “${tr.text || '?'}” 하면 발동.` : ` Fires when "${tr.text || '?'}".`;
@@ -672,8 +699,8 @@ function bookFoot() {
 
 // ---------- actions ----------
 
-function doJudge(effectId, what) {
-    const a = judge(effectId, what);
+function doJudge(effectId, what, via = '') {
+    const a = judge(effectId, what, via);
     if (!a) return;
     const v = views().find(x => x.e.id === effectId);
     if (v) {
@@ -720,6 +747,8 @@ function buildSpec(d) {
         surprise: !!d.surprise && d.method !== 'stacked' && d.trigger.kind !== 'now',
         title: String(d.title || '').trim(),
     };
+    if (SIMPLE[d.spell]?.variants) spec.variant = d.variant || SIMPLE[d.spell].variants[0];
+    if (SIMPLE[d.spell]?.needsX) spec.x = String(d.x || '').trim();
     if (d.spell === 'polymorph') {
         spec.form = d.form.custom
             ? { custom: true, name: String(d.form.name || '').trim(), can: String(d.form.can || '').trim(), cannot: String(d.form.cannot || '').trim() }
@@ -729,6 +758,7 @@ function buildSpec(d) {
 }
 
 function validate(d, forCard = false) {
+    if (SIMPLE[d.spell]?.needsX && !String(d.x || '').trim()) return t(`need_x_${d.spell}`);
     if (d.spell === 'polymorph' && d.form.custom && !String(d.form.name || '').trim()) return t('need_form');
     if (d.method === 'stacked' && !String(d.trigger.text || '').trim()) return t('need_cond');
     if (d.method !== 'stacked' && (d.method === 'curse' || d.trigger.kind === 'condition') && !String(d.trigger.text || '').trim()) return t('need_cond');
@@ -802,6 +832,7 @@ function spellEnglish(d) {
         const f = d.form.custom ? (d.form.name || 'something') : (formById(d.form.id)?.name.en || 'cat');
         return d.method === 'stacked' ? `A curse that slowly turns ${who} into a ${f}, step by step, each time "${d.trigger.text}" happens` : `${who} is turned into a ${f}`;
     }
+    if (SIMPLE[d.spell]) return `${who} — ${spellName(d.spell)}: ${stateText({ spell: d.spell, variant: d.variant, x: d.x || 'someone else' }, null, 'en').look}`;
     return d.spell === 'titan' ? `${who} grows to twice their height` : `${who} shrinks to palm size`;
 }
 
@@ -962,7 +993,7 @@ function onWinClick(e) {
         ui.allClosed = !views().some(v => ui.opened.has(v.e.id));
         return rerender();
     }
-    if ((el = q('[data-mage-judge]'))) return doJudge(el.dataset.mageJudge, el.dataset.what);
+    if ((el = q('[data-mage-judge]'))) return doJudge(el.dataset.mageJudge, el.dataset.what, el.dataset.via);
     if ((el = q('[data-mage-dispel]'))) return doDispel(el.dataset.mageDispel);
     if (q('[data-mage-undo]')) return doUndo();
     if ((el = q('[data-mage-dur]'))) { ui.draft.duration = Number(el.dataset.mageDur); ui.draft.touched.duration = true; return rerender(); }
@@ -997,6 +1028,7 @@ function onWinChange(e) {
             break;
         case 'formSel': setForm(v); break;
         case 'dispelWhat': d.dispelWhat = v; return;
+        case 'variant': d.variant = v; break;
         case 'srcKind': d.source.kind = v; break;
         case 'motive': d.motive = v; applyMotive(d); break;
         case 'method':
@@ -1028,6 +1060,7 @@ function onWinInput(e) {
         case 'formName': d.form.name = v; break;
         case 'formCan': d.form.can = v; break;
         case 'formCannot': d.form.cannot = v; break;
+        case 'x': d.x = v; break;
         case 'srcName': d.source.name = v; break;
         case 'trigTurns': d.trigger.turns = v; break;
         case 'trigChance': d.trigger.chance = v; break;

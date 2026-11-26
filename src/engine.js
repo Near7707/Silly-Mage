@@ -206,8 +206,8 @@ function addAction(a) {
 }
 
 /** A condition button. `what` = 'stack' | 'release' | 'trigger'. */
-export function judge(effectId, what) {
-    return addAction({ type: 'judge', effectId, what, at: lastRef(), delivered: null });
+export function judge(effectId, what, via = '') {
+    return addAction({ type: 'judge', effectId, what, via, at: lastRef(), delivered: null });
 }
 
 export function dispel(effectIds, by = '') {

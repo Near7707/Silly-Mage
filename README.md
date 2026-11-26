@@ -11,13 +11,22 @@ You can just type "she turned into a cat" and the AI will play along. A few turn
 - **Counts for you.** It tracks duration, curse stages and chance rolls, and only the result goes to the AI.
 - **Keeps the story consistent.** The cause stays fixed and is sent every turn, so the AI doesn't invent a new reason each time.
 
-## Stage 1 spells
+## Spells
 
 | Spell | Family | What it does |
 |---|---|---|
 | **Polymorph** | Change | Turns the target into a creature: cat, dog, fox, rabbit, sheep, turtle, owl, bird. You can also type your own form and let the AI fill in its abilities, or roll 🎲 (from all forms or only the ones you checked). |
 | **Titan** | Change | The body grows to twice its height. Same shape, just bigger. |
 | **Mite** | Change | The body shrinks to palm size. Same shape, just smaller. |
+| **Levitate** | Change | Floats. Easy to reach high places, hard to hold things. |
+| **Truth** | Mind | Cannot lie. |
+| **Reverse** | Mind | Everything they say comes out reversed. |
+| **Charm** | Mind | People nearby want to be kind to them. |
+| **Fear** | Mind | Gripped by fear; runs or hides. |
+| **Sleep** | Mind | Deep magical sleep. The **⏰ Woken up** button breaks it. |
+| **Glamour** | Illusion | Only the look changes ("looks like …"). Not a real change; it may slip. |
+| **Invisibility** | Illusion | Completely unseen: no sound, footsteps or scent. The **✋ Touched someone** button breaks it. |
+| **Luck / Jinx** | Fate | Things go well — or, turned around, keep going wrong. |
 | **Dispel** | Ward | Removes one effect, or every effect of one family. |
 
 **Stacking curse.** Each time a condition happens (for example "💧 touched water"), the target changes one step: ears → tail → no words → full change.
