@@ -8,7 +8,7 @@
 
 import { t, lang, josa } from './i18n.js';
 import { settings, save, chatState, currentChatId, uid } from './store.js';
-import { SIMPLE, STAGE_MAX } from './spells.js';
+import { SIMPLE, STAGE_MAX, nameKey } from './spells.js';
 import { views, chatView, judge, secretRelease, veiled } from './engine.js';
 import { targetName, nameEn, formText, stateText } from './describe.js';
 import { askJudge } from './ai.js';
@@ -227,7 +227,7 @@ function labelOf(it) {
 
 /** Is a stored suggestion still something that can be done? */
 export function spellLabel(it) {
-    return t(it.spell === 'luck' && it.variant === 'bad' ? 'spell_jinx' : `spell_${it.spell}`);
+    return t(`spell_${nameKey(it.spell, it.variant)}`);
 }
 
 function valid(it, list = views()) {

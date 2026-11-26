@@ -11,7 +11,7 @@
 //   reply and the spell is gone (and the "how often" count winds back with it).
 
 import { ctx, settings, save, chatState, currentChatId } from './store.js';
-import { SPELLS, SPELL_ORDER, SIMPLE, FORMS, MAX_EFFECTS } from './spells.js';
+import { SPELLS, SPELL_ORDER, SIMPLE, FORMS, MAX_EFFECTS, ALT } from './spells.js';
 import { chatView, posOf, turnsAfter, cast, castAction, views, liveCount, lastRef, actionValid } from './engine.js';
 import { targetName, nameEn } from './describe.js';
 
@@ -123,11 +123,13 @@ const NAME_TO_SPELL = {
     polymorph: ['polymorph', ''], titan: ['titan', ''], mite: ['mite', ''], levitate: ['levitate', ''], truth: ['truth', ''],
     reverse: ['reverse', ''], charm: ['charm', ''], fear: ['fear', ''], sleep: ['sleep', ''], glamour: ['glamour', ''],
     invisibility: ['invisibility', ''], luck: ['luck', 'good'], jinx: ['luck', 'bad'],
+    bind: ['bind', ''], haste: ['haste', 'good'], slow: ['haste', 'bad'], silence: ['silence', ''], echo: ['echo', ''],
+    smoke: ['smoke', ''], doppel: ['doppel', ''], doppelganger: ['doppel', ''], 'doppelgänger': ['doppel', ''], mark: ['mark', ''],
 };
 
 /** "Polymorph (cat)" → { spell, variant, detail } or null. */
 export function readSpell(text) {
-    const m = /^\s*\**\s*([A-Za-z]+)\s*\**\s*(?:[([]\s*([^)\]]*?)\s*[)\]])?/.exec(String(text || ''));
+    const m = /^\s*\**\s*([\p{L}]+)\s*\**\s*(?:[([]\s*([^)\]]*?)\s*[)\]])?/u.exec(String(text || ''));
     if (!m) return null;
     const hit = NAME_TO_SPELL[m[1].toLowerCase()];
     if (!hit) return null;
@@ -136,8 +138,8 @@ export function readSpell(text) {
 
 /** The spell list as the check and the dice describe it. */
 export function spellListEn() {
-    return CASTER_SPELLS.flatMap(id => (id === 'luck'
-        ? [`Luck (${briefEn('luck', 'good')})`, `Jinx (${briefEn('luck', 'bad')})`]
+    return CASTER_SPELLS.flatMap(id => (ALT[id]
+        ? [`${nameEn({ spell: id, variant: 'good' })} (${briefEn(id, 'good')})`, `${nameEn({ spell: id, variant: 'bad' })} (${briefEn(id, 'bad')})`]
         : [`${nameEn({ spell: id })} (${briefEn(id)})`])).join('; ');
 }
 
@@ -251,8 +253,8 @@ export function rollDice(view, speakerAvatar, chatId = currentChatId(), skipLast
     for (const sp of conf.spells) for (const tg of targets) if (!castBlock(sp, tg, list)) options.push([sp, tg]);
     if (!options.length) return null;
     const [spell, target] = options[hash(`${seed}|pick`) % options.length];
-    const variant = spell === 'luck' ? (hash(`${seed}|v`) % 2 ? 'bad' : 'good') : '';
-    const spName = spell === 'luck' && variant === 'bad' ? 'Jinx' : nameEn({ spell });
+    const variant = SIMPLE[spell]?.variants ? (hash(`${seed}|v`) % 2 ? 'bad' : 'good') : '';
+    const spName = nameEn({ spell, variant });
     // Cast in secret (2-C-1): half of the hits, when it is on.
     const sneak = conf.sneak && hash(`${seed}|sneak`) % 2 === 0;
     // …and whether I sense it coming (0.7.0). Same message, same answer.

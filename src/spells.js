@@ -26,10 +26,25 @@ export const SPELLS = {
     glamour:      { family: 'illusion', icon: 'glamour', simple: true },
     invisibility: { family: 'illusion', icon: 'invisibility', simple: true },
     luck:         { family: 'fate', icon: 'luck', simple: true },
+    // 0.8.0
+    bind:         { family: 'change', icon: 'bind', simple: true },
+    haste:        { family: 'change', icon: 'haste', simple: true },
+    silence:      { family: 'mind', icon: 'silence', simple: true },
+    echo:         { family: 'mind', icon: 'echo', simple: true },
+    smoke:        { family: 'illusion', icon: 'smoke', simple: true },
+    doppel:       { family: 'illusion', icon: 'doppel', simple: true },
+    mark:         { family: 'fate', icon: 'mark', simple: true },
     dispel:       { family: 'ward', icon: 'dispel', utility: true },
 };
-export const SPELL_ORDER = ['polymorph', 'titan', 'mite', 'levitate', 'truth', 'reverse', 'charm', 'fear', 'sleep',
-    'glamour', 'invisibility', 'luck', 'dispel'];
+export const SPELL_ORDER = ['polymorph', 'titan', 'mite', 'levitate', 'bind', 'haste',
+    'truth', 'reverse', 'charm', 'fear', 'sleep', 'silence', 'echo',
+    'glamour', 'invisibility', 'smoke', 'doppel', 'luck', 'mark', 'dispel'];
+
+/** A spell's other name when turned around: Luck → Jinx, Haste → Slow. */
+export const ALT = { luck: 'jinx', haste: 'slow' };
+export const altOf = (spell, variant) => (variant === 'bad' && ALT[spell]) || '';
+/** The i18n / name key for a spell and its direction ('jinx', 'slow', or the spell id). */
+export const nameKey = (spell, variant) => altOf(spell, variant) || spell;
 
 /**
  * Spells that only change what someone can do (no new body). {who} = target name, {x} = typed
@@ -103,6 +118,61 @@ export const SIMPLE = {
         can: null, cannot: null,
         start: '{who} has just become very lucky.', startBad: '{who} has just been jinxed.',
         end: "{who}'s luck is back to normal.", react: false,
+    },
+    // ---------- 0.8.0 ----------
+    bind: {
+        effect: { en: 'held still by unseen bonds; can talk and turn their head, but cannot move their arms or legs', ko: '보이지 않는 끈에 묶여 몸이 굳음 (말은 됨)' },
+        can: { en: 'talk, turn their head', ko: '말하기, 고개 돌리기' },
+        cannot: { en: 'walk, move their arms or legs', ko: '걷기, 팔다리 움직이기' },
+        start: "{who}'s body has just been held still by unseen bonds: they can talk, but cannot move their limbs.",
+        end: '{who} can move freely again.', react: true,
+    },
+    haste: {
+        variants: ['good', 'bad'],
+        effect: { en: 'moves and acts much faster than everyone else', ko: '남보다 훨씬 빨리 움직임' },
+        effectBad: { en: 'moves as if through deep water, far slower than everyone else', ko: '물속처럼 아주 느리게 움직임' },
+        can: { en: 'move and act very fast', ko: '아주 빨리 움직이기' },
+        cannot: { en: 'stay still for long', ko: '오래 가만히 있기' },
+        canBad: { en: 'think as usual', ko: '평소처럼 생각하기' },
+        cannotBad: { en: 'move fast, hurry', ko: '빨리 움직이기, 서두르기' },
+        start: '{who} has just started moving much faster than everyone else.',
+        startBad: '{who} has just slowed down, as if moving through deep water.',
+        end: '{who} moves at a normal speed again.', react: true,
+    },
+    silence: {
+        effect: { en: 'cannot make a sound with their voice; can still gesture or write', ko: '목소리가 안 나옴 (몸짓·글씨는 됨)' },
+        can: { en: 'gesture, write, make faces', ko: '몸짓, 글씨, 표정' },
+        cannot: { en: 'speak aloud, chant spells', ko: '소리 내 말하기, 주문 외우기' },
+        start: '{who} has just lost their voice to magic: no sound comes out when they try to speak.',
+        end: "{who}'s voice has come back.", react: true,
+    },
+    echo: {
+        effect: { en: "can't help repeating the last few words others say to them", ko: '남의 말 끝을 저도 모르게 따라 함' },
+        can: { en: 'speak as usual', ko: '평소처럼 말하기' },
+        cannot: { en: 'stop echoing what others say', ko: '남의 말 끝 안 따라 하기' },
+        start: '{who} has just started echoing the last few words others say to them, without meaning to.',
+        end: '{who} has stopped echoing others.', react: true,
+    },
+    smoke: {
+        effect: { en: 'wrapped in thick smoke that clings to them; they and those near them can barely see', ko: '짙은 연기가 들러붙어 서로 잘 안 보임' },
+        can: { en: 'move inside the smoke, slip away', ko: '연기 속에서 움직이기, 빠져나가기' },
+        cannot: { en: 'see far, be seen clearly', ko: '멀리 보기, 또렷이 보이기' },
+        start: 'Thick smoke has just welled up around {who} and clings to them wherever they go.',
+        end: 'The smoke around {who} has just cleared.', react: true,
+    },
+    doppel: {
+        effect: { en: 'has an exact double that wanders on its own, saying and doing things they never would; others mistake it for the real one', ko: '똑같은 분신이 제멋대로 다니며 엉뚱한 짓을 함 (진짜로 오해받음)' },
+        can: { en: 'go about as usual', ko: '평소대로 지내기' },
+        cannot: { en: 'control the double, make it vanish', ko: '분신 부리기, 분신 없애기' },
+        start: 'An exact double of {who} has just appeared somewhere nearby and started wandering on its own.',
+        end: "{who}'s double has just vanished.", react: true,
+    },
+    mark: {
+        effect: { en: 'bears a faint glowing mark; whoever cast it always senses where they are', ko: '희미하게 빛나는 표식 — 건 쪽이 늘 위치를 앎' },
+        can: { en: 'go about as usual', ko: '평소대로 지내기' },
+        cannot: { en: 'hide the mark, hide from whoever cast it', ko: '표식 숨기기, 건 쪽에게서 숨기' },
+        start: 'A faint glowing mark has just appeared on {who}.',
+        end: 'The mark on {who} has faded away.', react: false,
     },
 };
 

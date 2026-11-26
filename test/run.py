@@ -392,6 +392,111 @@ def flair(browser):
     page.close()
 
 
+def spells_080(browser):
+    print('16. 0.8.0 spells: Bind, Haste/Slow, Silence, Echo, Smoke, Doppel, Mark')
+    page, errors = open_page(browser, 'fresh', 390, 844)
+    def mstate():
+        m = page.evaluate('window.__fakeST.ctx.extensionSettings.mage')
+        return m['chats'][page.evaluate('window.__fakeST.state.chatName')]
+    def close_win(): page.evaluate("document.querySelector('#mage_win [data-mage-close]') && document.querySelector('#mage_win [data-mage-close]').click()")
+    cases = [
+        ('bind', '', "Juno's body has just been held still", 'Bind: held still by unseen bonds'),
+        ('haste', 'good', 'Juno has just started moving much faster', 'Haste: moves and acts much faster'),
+        ('haste', 'bad', 'Juno has just slowed down', 'Slow: moves as if through deep water'),
+        ('silence', '', 'Juno has just lost their voice', 'Silence: cannot make a sound'),
+        ('echo', '', 'Juno has just started echoing', 'Echo: can\'t help repeating'),
+        ('smoke', '', 'Thick smoke has just welled up around Juno', 'Smoke: wrapped in thick smoke'),
+        ('doppel', '', 'An exact double of Juno has just appeared', 'Doppel: has an exact double'),
+        ('mark', '', 'A faint glowing mark has just appeared on Juno', 'Mark: bears a faint glowing mark'),
+    ]
+    for spell, variant, start, ongoing in cases:
+        open_win(page); page.click('[data-mage-view="cast"]')
+        page.select_option('[data-f="target"]', 'user')
+        page.select_option('[data-f="spell"]', spell)
+        if variant:
+            page.select_option('[data-f="variant"]', variant)
+        page.click('[data-mage-dur="3"]')
+        page.click('[data-mage-cast]')
+        turn(page)
+        check(start in prompt(page), f'{spell}{"/" + variant if variant else ""}: start note')
+        turn(page)
+        check(ongoing in prompt(page), f'{spell}{"/" + variant if variant else ""}: ongoing line')
+        if spell == 'haste' and variant == 'good':
+            open_win(page); page.click('[data-mage-view="cast"]')
+            page.select_option('[data-f="target"]', 'user')
+            page.select_option('[data-f="spell"]', 'haste')
+            page.select_option('[data-f="variant"]', 'bad')
+            page.click('[data-mage-cast]')
+            check(len([x for x in mstate()['effects'] if x['spell'] == 'haste']) == 1, 'Haste and Slow cannot both be on one target')
+            close_win()
+        if spell == 'haste' and variant == 'bad':
+            open_win(page); page.click('[data-mage-view="status"]')
+            check('Slow' in page.inner_text('.mage-card.open'), 'status card says Slow')
+            close_win()
+        for _ in range(3): turn(page)
+    # Echo + Reverse may sit together.
+    cast(page, spell='echo', duration=3, target='char:mira.png')
+    cast(page, spell='reverse', duration=3, target='char:mira.png')
+    sp = [x['spell'] for x in mstate()['effects'] if x['target'].get('avatar') == 'mira.png']
+    check('echo' in sp and 'reverse' in sp, 'Echo and Reverse can be on one target')
+    # Characters: the check's list, reading names back
+    info = page.evaluate("""async () => { const m = await import('/src/casters.js');
+        return { list: m.spellListEn(), slow: m.readSpell('Slow - Juno'), dop: m.readSpell('Doppelgänger - Juno'), n: m.CASTER_SPELLS.length }; }""")
+    check('Slow (' in info['list'] and 'Haste (' in info['list'] and 'Doppel (' in info['list'] and 'Mark (' in info['list'], 'character spell list has the new spells')
+    check(info['slow'] and info['slow']['spell'] == 'haste' and info['slow']['variant'] == 'bad', 'reads "Slow" as Haste turned around')
+    check(info['dop'] and info['dop']['spell'] == 'doppel', 'reads "Doppelgänger" as Doppel')
+    check(info['n'] == 19, f'characters can use 19 spells ({info["n"]})')
+    # A character casts Slow, noticed in the story
+    open_win(page); page.click('[data-mage-view="casters"]')
+    page.click('[data-mage-cspell="haste"]')
+    page.screenshot(path=os.path.join(SHOTS, 'spells080_casters.png'))
+    cut = page.evaluate("[...document.querySelectorAll('.mage-lgrid .mage-lspell .mage-ell')].filter(e => e.scrollWidth > e.clientWidth + 1).map(e => e.textContent)")
+    check(not cut, f'caster grid names not cut ({cut})')
+    close_win()
+    for _ in range(4): turn(page)
+    page.evaluate("window.__judgeAnswer = 'S1: YES - Slow - Juno - she waved her hand slowly'")
+    turn(page); page.wait_for_timeout(1400)
+    page.click('#mage_bar .mage-sugpill')
+    box = page.inner_text('#mage_bar .mage-sug')
+    check('Mira cast Slow' in box, f'suggestion: Mira cast Slow ({box[:80]!r})')
+    page.click('#mage_bar [data-mage-sug-cast]')
+    e = mstate()['effects'][-1]
+    check(e['spell'] == 'haste' and e.get('variant') == 'bad' and e['source']['kind'] == 'character', 'applied: Mira\'s Slow')
+    page.evaluate("window.__judgeAnswer = 'S1: NO'")
+    # Rules on: Loadout picker lists all 20, grid not cut
+    rules_on(page)
+    open_win(page); page.click('[data-mage-view="cast"]')
+    page.click('[data-mage-loadout]')
+    n = page.evaluate("document.querySelectorAll('[data-mage-load-toggle]').length")
+    check(n == 20, f'Loadout picker lists 20 spells ({n})')
+    page.screenshot(path=os.path.join(SHOTS, 'spells080_loadout_en.png'), full_page=True)
+    cut = page.evaluate("[...document.querySelectorAll('.mage-lgrid .mage-lspell .mage-ell')].filter(e => e.scrollWidth > e.clientWidth + 1).map(e => e.textContent)")
+    check(not cut, f'Loadout grid names not cut ({cut})')
+    page.click('[data-mage-load-cancel]')
+    rules_on(page, False)
+    check(not errors, f'no errors ({errors[:3]})')
+    page.close()
+    # Korean: names, the Slow option, a cast
+    page, errors = open_page(browser, 'fresh&lang=ko', 390, 844)
+    open_win(page); page.click('[data-mage-view="cast"]')
+    page.select_option('[data-f="spell"]', 'haste')
+    opts = page.evaluate("[...document.querySelectorAll('[data-f=\"variant\"] option')].map(o => o.textContent)")
+    check(any('Slow' in o for o in opts), f'Korean: Slow option ({opts})')
+    page.select_option('[data-f="variant"]', 'bad')
+    page.screenshot(path=os.path.join(SHOTS, 'spells080_cast_ko.png'))
+    page.click('[data-mage-cast]')
+    card = page.inner_text('.mage-card.open')
+    check('Slow' in card and '느리게' in card, f'Korean card: Slow ({card[:120]!r})')
+    rules_on(page)
+    open_win(page); page.click('[data-mage-view="cast"]')
+    page.click('[data-mage-loadout]')
+    page.screenshot(path=os.path.join(SHOTS, 'spells080_loadout_ko.png'), full_page=True)
+    cut = page.evaluate("[...document.querySelectorAll('.mage-lgrid .mage-lspell .mage-ell')].filter(e => e.scrollWidth > e.clientWidth + 1).map(e => e.textContent)")
+    check(not cut, f'Korean Loadout grid not cut ({cut})')
+    check(not errors, f'no errors ({errors[:3]})')
+    page.close()
+
+
 def main():
     server = subprocess.Popen([sys.executable, os.path.join(HERE, 'server.py'), str(PORT)])
     time.sleep(0.8)
@@ -1125,6 +1230,7 @@ def main():
             page.close()
 
             flair(browser)
+            spells_080(browser)
             browser.close()
     finally:
         server.terminate()

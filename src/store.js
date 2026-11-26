@@ -1,5 +1,7 @@
 // Mage data lives only in extension settings (never in character cards, chat files or chat metadata).
 
+import { SPELL_ORDER } from './spells.js';
+
 export const MODULE = 'mage';
 export const FORMAT = 2;
 
@@ -94,7 +96,7 @@ export function migrate(s) {
     s.judgeCount = Math.min(20, Math.max(2, Math.round(Number(s.judgeCount) || 4)));
     s.contextCount = Math.min(20, Math.max(0, Number(s.contextCount) || 0));
     s.maxMana = Math.min(30, Math.max(1, Math.round(Number(s.maxMana) || 10)));
-    s.loadoutSize = Math.min(13, Math.max(1, Math.round(Number(s.loadoutSize) || 6)));
+    s.loadoutSize = Math.min(SPELL_ORDER.length, Math.max(1, Math.round(Number(s.loadoutSize) || 6)));
     s.miscastChance = pct(s.miscastChance, 5);
     s.critChance = pct(s.critChance, 10);
     return s;

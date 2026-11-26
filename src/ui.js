@@ -9,7 +9,7 @@ import {
 } from './casters.js';
 import { ctx, settings, save, currentChatId, uid, fixRelease } from './store.js';
 import {
-    SIMPLE, FAMILIES, SPELLS, SPELL_ORDER, FORMS, formById, STAGES, STAGE_MAX, SOURCES, MOTIVES, TRIGGERS, RELEASES,
+    SIMPLE, FAMILIES, SPELLS, SPELL_ORDER, altOf, nameKey, FORMS, formById, STAGES, STAGE_MAX, SOURCES, MOTIVES, TRIGGERS, RELEASES,
     VISIBILITY, DURATIONS, MAX_EFFECTS, MOTIVE_SUGGEST, RANDOM_OBJECTS, RANDOM_PLACES,
 } from './spells.js';
 import {
@@ -59,8 +59,8 @@ function mode() { return colorMode(settings().skin, ui.vars); }
 function famCol(family) { return famColor(FAMILIES[family]?.color || '#888888', mode()); }
 const spellName = (id) => t(`spell_${id}`);
 // Korean object particle after an English spell name, by how it is read (슬립을, 폴리모프를).
-const EUL = new Set(['titan', 'charm', 'sleep', 'luck']);
-const eulOf = (spell, variant) => (spell === 'luck' && variant === 'bad' ? '를' : EUL.has(spell) ? '을' : '를');
+const EUL = new Set(['titan', 'charm', 'sleep', 'luck', 'doppel']);
+const eulOf = (spell, variant) => (altOf(spell, variant) ? '를' : EUL.has(spell) ? '을' : '를');
 const jg = (name) => josa(name, '이/가');
 const famName = (id) => t(`fam_${id}`);
 
@@ -72,7 +72,7 @@ function formLabel(f, L = lang()) {
 }
 
 function simpleName(e) {
-    if (e.spell === 'luck' && e.variant === 'bad') return t('spell_jinx');
+    if (altOf(e.spell, e.variant)) return t(`spell_${altOf(e.spell, e.variant)}`);
     if (e.spell === 'glamour' && e.x) return `${spellName('glamour')} · ${e.x}`;
     return spellName(e.spell);
 }
@@ -171,7 +171,7 @@ function chipText(v) {
         if (v.stage <= 0) return `${t('curse')} 0/${STAGE_MAX}`;
         return `${STAGES[v.stage - 1].short[lang()]} ${v.stage}/${STAGE_MAX}`;
     }
-    const name = e.spell === 'polymorph' ? formLabel(e.form) : (e.spell === 'luck' && e.variant === 'bad' ? t('spell_jinx') : spellName(e.spell));
+    const name = e.spell === 'polymorph' ? formLabel(e.form) : spellName(nameKey(e.spell, e.variant));
     if (e.duration > 0) return `${name} ${e.surprise ? '?' : t('chip_turns', { n: v.left })}`;
     return `${name} ∞`;
 }
@@ -612,7 +612,7 @@ function ago(ts) {
 
 function actionLabel(a, e) {
     if (a.type === 'counter') {
-        const what = !e ? t(a.spell === 'luck' && a.variant === 'bad' ? 'spell_jinx' : `spell_${a.spell}`) : (veiled(e) || e.surprise) ? '???' : effectTitle(e);
+        const what = !e ? t(`spell_${nameKey(a.spell, a.variant)}`) : (veiled(e) || e.surprise) ? '???' : effectTitle(e);
         return `${a.name && !(e && veiled(e)) ? `${a.name} · ` : ''}${t('hist_counter', { what })}`;
     }
     if (veiled(e)) return `${t('unknown_spell')} → ${a.what === 'release' ? t('released_short') : '?'}`;
@@ -1247,6 +1247,7 @@ export function describeSpec(d, L = lang()) {
         const x = d.x || '?';
         s = ko ? `대상의 겉모습을 ${x}${josa(x, '으로/로')} 보이게 한다.` : `Makes the target look like ${x}.`;
     } else if (d.spell === 'luck' && d.variant === 'bad') s = ko ? '대상의 일이 자꾸 꼬인다.' : 'Things keep going wrong for the target.';
+    else if (d.spell === 'haste' && d.variant === 'bad') s = ko ? '대상이 물속처럼 아주 느려진다.' : 'The target slows down, as if moving through deep water.';
     else if (SIMPLE[d.spell]) s = t(`desc_${d.spell}`);
     if (d.method !== 'stacked') {
         const tr = d.trigger || {};

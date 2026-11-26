@@ -3,11 +3,11 @@
 
 import { t, setLanguage, lang, LANGUAGES } from './i18n.js';
 import { ctx, settings, save, uiLang, chooseLang, exportData, importData, pct } from './store.js';
-import { FORMS } from './spells.js';
+import { FORMS, SPELL_ORDER } from './spells.js';
 import { getProfiles } from './ai.js';
 import { resetPos } from './win.js';
 
-export const VERSION = '0.7.0';
+export const VERSION = '0.8.0';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const toast = (kind, msg) => { try { globalThis.toastr?.[kind]?.(msg, 'Mage'); } catch { /* ignore */ } };
@@ -57,7 +57,7 @@ export function prefsHtml(win) {
         + sub(t('set_rules_sub'))
         + check('rules', s.rules, t('set_rules')) + hint(t('set_rules_hint'))
         + field(t('set_max_mana'), num('maxMana', s.maxMana, 1, 30))
-        + field(t('set_loadout_size'), num('loadoutSize', s.loadoutSize, 1, 13))
+        + field(t('set_loadout_size'), num('loadoutSize', s.loadoutSize, 1, SPELL_ORDER.length))
         + check('strict', s.strictRelease, t('set_strict')) + hint(t('set_strict_hint'))
         + sub(t('set_judge_sub'))
         + field(t('set_judge_mode'), sel('judgeMode', ['off', 'suggest', 'auto'].map(k => [k, t(`judge_${k}`)]), s.judgeMode))
@@ -131,7 +131,7 @@ export function prefsChange(e) {
         case 'rules': s.rules = el.checked; save(); hooks.redrawAll(); break;
         case 'strict': s.strictRelease = el.checked; save(); hooks.redrawAll(); break;
         case 'maxMana': s.maxMana = Math.min(30, Math.max(1, Math.round(Number(el.value) || 10))); el.value = s.maxMana; save(); hooks.redrawAll(); break;
-        case 'loadoutSize': s.loadoutSize = Math.min(13, Math.max(1, Math.round(Number(el.value) || 6))); el.value = s.loadoutSize; save(); hooks.redrawAll(); break;
+        case 'loadoutSize': s.loadoutSize = Math.min(SPELL_ORDER.length, Math.max(1, Math.round(Number(el.value) || 6))); el.value = s.loadoutSize; save(); hooks.redrawAll(); break;
         case 'profile': s.profileId = el.value; save(); break;
         case 'judgeMode': s.judgeMode = ['off', 'suggest', 'auto'].includes(el.value) ? el.value : 'suggest'; save(); hooks.redrawAll(); break;
         case 'judgeUnbind': s.judgeUnbind = el.checked; save(); hooks.redrawAll(); break;

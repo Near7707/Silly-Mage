@@ -8,6 +8,7 @@ import { views, setSent, markDelivered, copyFromParent, chatView, undeliveredCou
 import { rollDice, setDice, getDice, castByCharacter } from './src/casters.js';
 import { buildPrompt, counterNote } from './src/describe.js';
 import { MAGE_GLYPH } from './src/icons.js';
+import { nameKey } from './src/spells.js';
 import { VERSION, prefsHtml, prefsClick, prefsChange, prefsFocus, setPrefsHooks } from './src/prefs.js';
 import { maybeCheck, setJudgeHook } from './src/judge.js';
 import { mountBar, refresh, openWindow, closeWindow, isOpen, setOnChange, disableAll, rerenderAll } from './src/ui.js';
@@ -37,7 +38,7 @@ function updatePrompt(genType = pendingGen, live = false) {
         text = built.text;
         if (live) setSent(withNotes ? built.notes : []);
         if (live) setDice(dice ? { ...dice, chatId: currentChatId(),
-            label: t(dice.spell === 'luck' && dice.variant === 'bad' ? 'spell_jinx' : `spell_${dice.spell}`) } : null);
+            label: t(`spell_${nameKey(dice.spell, dice.variant)}`) } : null);
     }
     try {
         // 1 = in chat, depth 1 (close to the reply, so it is not forgotten), no world-info scan, system role.

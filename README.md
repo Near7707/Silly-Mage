@@ -19,14 +19,21 @@ You can just type "she turned into a cat" and the AI will play along. A few turn
 | **Titan** | Change | The body grows to twice its height. Same shape, just bigger. |
 | **Mite** | Change | The body shrinks to palm size. Same shape, just smaller. |
 | **Levitate** | Change | Floats. Easy to reach high places, hard to hold things. |
+| **Bind** | Change | Unseen bonds hold the body still. They can still talk. |
+| **Haste / Slow** | Change | Much faster than everyone, or, turned around, far slower. |
 | **Truth** | Mind | Cannot lie. |
 | **Reverse** | Mind | Everything they say comes out reversed. |
 | **Charm** | Mind | People nearby want to be kind to them. |
 | **Fear** | Mind | Gripped by fear; runs or hides. |
 | **Sleep** | Mind | Deep magical sleep. The **⏰ Woken up** button breaks it. |
+| **Silence** | Mind | No sound comes from the voice. Gestures and writing still work. |
+| **Echo** | Mind | Keeps repeating the last words others say. |
 | **Glamour** | Illusion | Only the look changes ("looks like …"). Not a real change; it may slip. |
 | **Invisibility** | Illusion | Completely unseen: no sound, footsteps or scent. The **✋ Touched someone** button breaks it. |
+| **Smoke** | Illusion | Thick smoke clings to the target. No one nearby sees clearly. |
+| **Doppel** | Illusion | A double appears and wanders on its own. Others mistake it for the real one. |
 | **Luck / Jinx** | Fate | Things go well — or, turned around, keep going wrong. |
+| **Mark** | Fate | A faint glowing mark. Whoever cast it always senses where the target is. |
 | **Dispel** | Ward | Removes one effect, or every effect of one family. |
 
 **Stacking curse.** Each time a condition happens (for example "💧 touched water"), the target changes one step: ears → tail → no words → full change.

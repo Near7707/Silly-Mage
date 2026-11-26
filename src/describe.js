@@ -2,7 +2,7 @@
 // English lines for the AI.
 
 import { ctx, settings } from './store.js';
-import { FORMS, formById, SIZE, STAGES, STAGE_MAX, SIMPLE } from './spells.js';
+import { FORMS, formById, SIZE, STAGES, STAGE_MAX, SIMPLE, altOf } from './spells.js';
 import { clueDue, omenDue } from './engine.js';
 
 export function targetName(target) {
@@ -41,8 +41,11 @@ const fillX = (str, e) => (str == null ? null : String(str).replaceAll('{x}', St
 export function stateText(e, v, lang) {
     const def = SIMPLE[e.spell];
     if (def) {
-        const eff = e.variant === 'bad' && def.effectBad ? def.effectBad : def.effect;
-        return { look: fillX(eff[lang], e), can: def.can ? fillX(def.can[lang], e) : null, cannot: def.cannot ? fillX(def.cannot[lang], e) : null };
+        const bad = e.variant === 'bad';
+        const eff = bad && def.effectBad ? def.effectBad : def.effect;
+        const can = bad && def.canBad ? def.canBad : def.can;
+        const cannot = bad && def.cannotBad ? def.cannotBad : def.cannot;
+        return { look: fillX(eff[lang], e), can: can ? fillX(can[lang], e) : null, cannot: cannot ? fillX(cannot[lang], e) : null };
     }
     if (e.spell === 'titan' || e.spell === 'mite') {
         const s = SIZE[e.spell];
@@ -61,8 +64,10 @@ export function stateText(e, v, lang) {
 const SPELL_EN = {
     polymorph: 'Polymorph', titan: 'Titan', mite: 'Mite', dispel: 'Dispel', levitate: 'Levitate', truth: 'Truth',
     reverse: 'Reverse', charm: 'Charm', fear: 'Fear', sleep: 'Sleep', glamour: 'Glamour', invisibility: 'Invisibility', luck: 'Luck',
+    bind: 'Bind', haste: 'Haste', silence: 'Silence', echo: 'Echo', smoke: 'Smoke', doppel: 'Doppel', mark: 'Mark',
+    jinx: 'Jinx', slow: 'Slow',
 };
-export const nameEn = (e) => (e.spell === 'luck' && e.variant === 'bad' ? 'Jinx' : SPELL_EN[e.spell] || e.spell);
+export const nameEn = (e) => SPELL_EN[altOf(e.spell, e.variant)] || SPELL_EN[e.spell] || e.spell;
 const fillWho = (str, who, e) => fillX(String(str).replaceAll('{who}', who), e);
 
 function sourceEn(src) {
@@ -229,7 +234,7 @@ function dramaEn(e) {
 export function counterNote(a, e) {
     const me = targetName({ kind: 'user' });
     const who = targetName(e ? e.target : a.target);
-    const spell = e ? nameEn(e) : (a.spell === 'luck' && a.variant === 'bad' ? 'Jinx' : SPELL_EN[a.spell] || 'spell');
+    const spell = e ? nameEn(e) : (a.spell ? nameEn(a) : 'spell');
     const by = String((e?.source?.kind === 'character' ? e.source.name : a.name) || '').trim();
     if (e?.veiled) {
         return `The unseen magic that had quietly begun on ${who} was suddenly thrown off by ${me}: it bounced away and faded, and has no effect anymore. Do not reveal who cast it or what it was. Write it in this reply.`;
