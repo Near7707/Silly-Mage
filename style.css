@@ -303,21 +303,37 @@
 .mage-skin-cursed .mage-cell.on { background: rgb(196, 52, 52); }
 .mage-skin-cursed .mage-btn, .mage-skin-cursed .mage-seg, .mage-skin-cursed .mage-input, .mage-skin-cursed .mage-select { border-radius: 3px; }
 
-/* ---------- settings panel ---------- */
-.mage-panel-body { display: flex; flex-direction: column; gap: 8px; }
-.mage-panel-hint { font-size: 12.5px; opacity: .8; }
-.mage-panel-sub { margin-top: 6px; font-weight: 700; font-size: 13px; }
-.mage-panel-btn { display: inline-flex !important; align-items: center; justify-content: center; gap: 6px; height: 36px; margin: 0 !important; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.mage-panel-btn span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.mage-panel-row { display: flex; gap: 8px; }
-.mage-panel-row .mage-panel-btn { flex: 1 1 0; min-width: 0; }
-.mage-panel-field { display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
-.mage-panel-check { align-items: flex-start; font-size: 13px; }
-.mage-panel .mage-sel { position: relative; }
-.mage-panel .mage-sel::after { border-color: currentColor; opacity: .7; }
-.mage-panel select.mage-select { font-size: 15px; }
-.mage-panel-num { width: 100px !important; font-size: 15px; }
-.mage-pool { display: flex; flex-wrap: wrap; gap: 6px; }
-.mage-pchip { display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px; border: 1px solid var(--SmartThemeBorderColor, #888); border-radius: 14px; font-size: 13px; cursor: pointer; }
+/* ---------- settings (extension panel: SillyTavern's own sizes; ⚙ page: Mage's look) ---------- */
+.mage-prefs { display: flex; flex-direction: column; gap: 6px; }
+.mage-pfield { display: flex; flex-direction: column; gap: 2px; margin: 0; }
+.mage-plabel { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mage-phint { font-size: calc(var(--mainFontSize, 15px) * .85); opacity: .75; }
+.mage-psub { margin-top: 6px; font-weight: 700; }
+.mage-pcheck { margin: 0; }
+.mage-prow { display: flex; gap: 6px; }
+.mage-prow > * { flex: 1 1 0; min-width: 0; }
+.mage-pbtn { display: flex !important; align-items: center; justify-content: center; gap: 6px; margin: 0 !important; white-space: nowrap; overflow: hidden; }
+.mage-popen { margin: 4px 0 6px !important; }
+.mage-panel .mage-sel { position: relative; display: block; }
+.mage-panel .mage-sel::after {
+    content: ''; position: absolute; right: 10px; top: 50%; width: 7px; height: 7px; margin-top: -5px; pointer-events: none;
+    border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(45deg); opacity: .6;
+}
+.mage-panel select.mage-pselect {
+    -webkit-appearance: none; appearance: none; background-image: none;
+    width: 100%; margin: 0; padding-right: 28px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.mage-pnum { width: 90px !important; margin: 0 !important; }
+.mage-pool { display: flex; flex-wrap: wrap; gap: 2px 12px; }
+.mage-pchip { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; white-space: nowrap; }
 .mage-pchip input { margin: 0; }
 .mage-wand-ico { display: inline-flex; align-items: center; justify-content: center; }
+/* ⚙ page inside the window */
+.mage-prefs-win { gap: 8px; }
+.mage-prefs-win .mage-plabel { font-size: 12.5px; color: var(--mage-muted); }
+.mage-prefs-win .mage-phint { font-size: 12.5px; color: var(--mage-muted); opacity: 1; }
+.mage-prefs-win .mage-pcheck { display: flex; align-items: center; gap: 8px; min-height: 34px; font-size: 14px; cursor: pointer; }
+.mage-prefs-win .mage-pcheck input, .mage-prefs-win .mage-pchip input { width: 18px; height: 18px; flex: 0 0 auto; }
+.mage-prefs-win .mage-pchip { min-height: 32px; font-size: 14px; }
+.mage-prefs-win .mage-psub { font-size: 13px; }
+.mage-hbtn.on { border-color: var(--mage-accent); color: var(--mage-accent); }

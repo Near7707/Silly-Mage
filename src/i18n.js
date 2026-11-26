@@ -100,7 +100,7 @@ const EN = {
     set_context: 'Recent messages the 🎲 cause reads', set_reset_pos: 'Reset window position', pos_reset: 'Window moved back.',
     set_backup: 'Backup', set_export: 'Export', set_import: 'Import', imported: 'Backup loaded.', import_fail: 'That file is not a Mage backup.',
     import_q: 'Replace all Mage data (effects, Spellbook, settings) with this backup?',
-    version: 'Version {v}',
+    version: 'Version {v}', settings: 'Settings', back: 'Back',
 };
 
 const KO = {
@@ -191,7 +191,7 @@ const KO = {
     set_context: '🎲 원인이 읽을 최근 메시지 수', set_reset_pos: '상태창 위치 초기화', pos_reset: '상태창을 제자리로 옮겼어요.',
     set_backup: '백업', set_export: '내보내기', set_import: '가져오기', imported: '백업을 불러왔어요.', import_fail: 'Mage 백업 파일이 아니에요.',
     import_q: 'Mage의 모든 데이터(걸린 효과, Spellbook, 설정)를 이 백업으로 바꿀까요?',
-    version: '버전 {v}',
+    version: '버전 {v}', settings: '설정', back: '돌아가기',
 };
 
 const TABLES = { en: EN, ko: KO };

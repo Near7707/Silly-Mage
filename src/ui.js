@@ -13,6 +13,7 @@ import { iconSvg, framedIcon, MAGE_GLYPH } from './icons.js';
 import { syncTheme, famColor, colorMode } from './theme.js';
 import { attachWindow, place } from './win.js';
 import { askCause, askForm } from './ai.js';
+import { prefsHtml, prefsClick, prefsChange, prefsFocus } from './prefs.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const toast = (kind, msg) => { try { globalThis.toastr?.[kind]?.(msg, 'Mage'); } catch { /* ignore */ } };
@@ -186,6 +187,7 @@ function ensureWindow() {
     winEl.setAttribute('role', 'dialog');
     winEl.innerHTML = `<div class="mage-cover"><div class="mage-page">
         <div class="mage-head"><span class="mage-title">${MAGE_GLYPH}<b>Mage</b></span><span class="mage-sum mage-ell"></span>
+          <button type="button" class="mage-hbtn" data-mage-gear>⚙</button>
           <button type="button" class="mage-hbtn" data-mage-collapse></button>
           <button type="button" class="mage-hbtn" data-mage-close>✕</button></div>
         <div class="mage-tabs"></div>
@@ -197,6 +199,7 @@ function ensureWindow() {
     winEl.addEventListener('click', onWinClick);
     winEl.addEventListener('change', onWinChange);
     winEl.addEventListener('input', onWinInput);
+    winEl.addEventListener('focusin', prefsFocus);
     attachWindow(winEl, winEl.querySelector('.mage-head'));
     return winEl;
 }
@@ -246,6 +249,10 @@ function renderWindow() {
     col.title = s.winCollapsed ? t('expand') : t('collapse');
     col.setAttribute('aria-label', col.title);
     winEl.querySelector('[data-mage-close]').title = t('close');
+    const gear = winEl.querySelector('[data-mage-gear]');
+    gear.title = t('settings');
+    gear.setAttribute('aria-label', t('settings'));
+    gear.classList.toggle('on', ui.view === 'settings');
     winEl.querySelector('.mage-tabs').innerHTML = ['status', 'cast', 'book'].map(v =>
         `<button type="button" class="mage-tab${ui.view === v ? ' on' : ''}" data-mage-view="${v}"><span class="mage-ell">${esc(v === 'status' ? t('tab_status', { n: live, max: MAX_EFFECTS }) : t(`tab_${v}`))}</span></button>`).join('');
     const orn = winEl.querySelector('.mage-orn');
@@ -257,6 +264,10 @@ function renderWindow() {
     const top = body.scrollTop;
     if (ui.view === 'status') { body.innerHTML = statusHtml(list); foot.innerHTML = statusFoot(); }
     else if (ui.view === 'cast') { body.innerHTML = castHtml(); foot.innerHTML = castFoot(); }
+    else if (ui.view === 'settings') {
+        body.innerHTML = `<div class="mage-editing">⚙ ${esc(t('settings'))}</div>${prefsHtml(true)}`;
+        foot.innerHTML = `<button type="button" class="mage-btn" data-mage-gear><span class="mage-ell">← ${esc(t('back'))}</span></button>`;
+    }
     else { body.innerHTML = bookHtml(); foot.innerHTML = bookFoot(); }
     if (ui.keepScroll) body.scrollTop = top; else body.scrollTop = 0;
     ui.keepScroll = false;
@@ -928,6 +939,14 @@ function onWinClick(e) {
     let el;
     if (q('[data-mage-close]')) return closeWindow();
     if (q('[data-mage-collapse]')) return setCollapsed(!settings().winCollapsed);
+    if (q('[data-mage-gear]')) {
+        if (ui.view === 'settings') ui.view = ui.prevView || 'status';
+        else { ui.prevView = ui.view; ui.view = 'settings'; }
+        if (settings().winCollapsed) { settings().winCollapsed = false; save(); }
+        renderWindow();
+        return place();
+    }
+    if (ui.view === 'settings' && prefsClick(e)) return;
     if ((el = q('[data-mage-view]'))) {
         if (el.closest('.mage-head')) return;
         ui.view = el.dataset.mageView;
@@ -964,6 +983,7 @@ function onWinClick(e) {
 }
 
 function onWinChange(e) {
+    if (ui.view === 'settings') { prefsChange(e); return; }
     const f = e.target.dataset?.f;
     const d = ui.draft;
     if (!f || !d) return;
@@ -1052,7 +1072,7 @@ export function refresh() {
     renderBar(shown(all));
     if (ui.open) {
         if (ui.view === 'cast' && !ui.draft) ui.draft = newDraft();
-        if (ui.view === 'cast' && winEl?.contains(document.activeElement) && /^(INPUT|TEXTAREA)$/.test(document.activeElement.tagName)) {
+        if ((ui.view === 'cast' || ui.view === 'settings') && winEl?.contains(document.activeElement) && /^(INPUT|TEXTAREA)$/.test(document.activeElement.tagName)) {
             renderHeadOnly();
         } else rerender();
     }
